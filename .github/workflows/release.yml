@@ -2,7 +2,7 @@ name: Build & Release
 
 # Releases are cut automatically when package.json's version changes on main
 # (npm run release:patch does that). A pushed v* tag or a manual run also works.
-# If a release for the current version already exists, nothing is rebuilt.
+# Flow: check (is vX.Y.Z already complete?) → build on Windows + macOS → publish once.
 on:
   push:
     branches: [main]
@@ -12,6 +12,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   check:
@@ -30,16 +34,19 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* && "$GITHUB_REF_NAME" != "v$V" ]]; then
             echo "::error::태그($GITHUB_REF_NAME)와 package.json 버전(v$V)이 다릅니다."; exit 1
           fi
-          if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          ASSETS=$(gh release view "v$V" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null || true)
+          if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]] \
+             && echo "$ASSETS" | grep -q '\.exe$' && echo "$ASSETS" | grep -q '\.dmg$' \
+             && echo "$ASSETS" | grep -qx 'latest.yml' && echo "$ASSETS" | grep -qx 'latest-mac.yml'; then
             echo "release=false" >> $GITHUB_OUTPUT
-            echo "v$V 릴리스가 이미 있어 건너뜁니다."
+            echo "v$V 릴리스가 이미 완성되어 있어 건너뜁니다."
           else
             echo "release=true" >> $GITHUB_OUTPUT
           fi
 
   build:
     needs: check
-    if: needs.check.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.check.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -79,32 +86,60 @@ jobs:
       - name: Package (${{ runner.os }})
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          PUBLISH=always
           set -o pipefail
           if [ "$RUNNER_OS" == "macOS" ]; then
-            CMD="npx electron-builder --mac --publish $PUBLISH -c.mac.notarize=${SC_NOTARIZE:-false}"
+            CMD="npx electron-builder --mac --publish never -c.mac.notarize=${SC_NOTARIZE:-false}"
           else
-            CMD="npx electron-builder --win --publish $PUBLISH"
+            CMD="npx electron-builder --win --publish never"
           fi
           if ! $CMD 2>&1 | tee build.log; then
             # surface the failure as annotations (readable without log access)
             tail -n 25 build.log | sed 's/%/%25/g' | while IFS= read -r line; do echo "::error::$line"; done
             exit 1
           fi
+          ls -la dist
 
       - uses: actions/upload-artifact@v4
         with:
-          name: installers-${{ runner.os }}
+          name: dist-${{ runner.os }}
           path: |
             dist/*.exe
             dist/*.dmg
             dist/*.zip
-            dist/*.yml
-          if-no-files-found: ignore
+            dist/*.blockmap
+            dist/latest*.yml
+          if-no-files-found: error
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ needs.check.outputs.version }}
+        run: |
+          ls -la out
+          # release notes = this version's section of CHANGELOG.md
+          awk -v h="## v$V" 'index($0,h)==1{f=1;next} /^## v/{if(f)exit} f' CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "Super Conversions v$V" > notes.md
+          printf '\n---\n**설치:** Windows → `SuperConversions-Setup-*.exe` · macOS(Apple Silicon) → `SuperConversions-*-arm64.dmg`\n이미 설치된 앱은 자동으로 업데이트됩니다.\n' >> notes.md
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release edit "v$V" --title "v$V" --notes-file notes.md --draft=false
+          else
+            gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md
+          fi
+          gh release upload "v$V" out/* --clobber
