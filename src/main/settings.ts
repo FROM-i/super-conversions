@@ -26,7 +26,14 @@ export const defaultSettings = (): Settings => ({
   signatures: [],
   shellIntegration: false,
   overlayRunsImmediately: true,
-  concurrency: 2
+  concurrency: 2,
+  libraryEnabled: true,
+  libraryDir: '',
+  libraryCollectMode: 'move',
+  libraryClipboard: false,
+  libraryExtraFolders: [],
+  launchAtLogin: false,
+  closeToTray: true
 })
 
 let cache: Settings | null = null

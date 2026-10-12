@@ -10,6 +10,10 @@ import type { ActionId } from '@shared/formats'
 import type { ActionOptions, Job } from '@shared/types'
 import { toDocx, toHwpx } from './engines/docmodel'
 import { saveSettings, addSignature } from './settings'
+import { renameFiles, undoLastRename } from './rename'
+import { DEFAULT_RULE } from '@shared/rename'
+import { startLibrary, stopLibrary, listLibrary } from './library'
+import { existsSync } from 'fs'
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -116,6 +120,56 @@ export async function runSelfTest(dir: string): Promise<boolean> {
     results.push({ action, status: pass ? 'PASS' : 'FAIL', ms: Date.now() - t0, files: j.files.map((f) => ({ out: f.outputs.map((o) => o.replace(dir, '.')), msg: f.message, report: f.report })) })
     console.log(`${pass ? 'PASS' : 'FAIL'}  ${action}  ${Date.now() - t0}ms  ${j.files.map((f) => f.message ?? '').join(' | ')}`)
   }
+  // ---------- rename: batch with numbering, swap safety, undo
+  {
+    const rd = P('rename')
+    await fs.mkdir(rd, { recursive: true })
+    for (const n of ['b.png', 'a.png', 'c.png']) await fs.copyFile(P('alpha.png'), join(rd, n))
+    const items = ['b.png', 'a.png', 'c.png'].map((n) => ({ path: join(rd, n) }))
+    const r1 = await renameFiles(items, { ...DEFAULT_RULE, pattern: '시안_{n}', pad: 3, start: 1 })
+    const want = ['시안_001.png', '시안_002.png', '시안_003.png']
+    const okA = r1.ok && want.every((w) => existsSync(join(rd, w))) && r1.renamed[0].from.endsWith('b.png') && r1.renamed[0].to.endsWith('시안_001.png')
+    // swap names a<->b in one batch
+    await fs.writeFile(join(rd, 'x.txt'), 'x')
+    await fs.writeFile(join(rd, 'y.txt'), 'y')
+    const r2 = await renameFiles([{ path: join(rd, 'x.txt') }, { path: join(rd, 'y.txt') }], { ...DEFAULT_RULE, mode: 'replace', find: 'x', replace: 'TMP' })
+    const okB = r2.ok && existsSync(join(rd, 'TMP.txt'))
+    const r3 = await undoLastRename()
+    const okC = r3.ok && existsSync(join(rd, 'x.txt'))
+    // collision must be refused
+    const r4 = await renameFiles([{ path: join(rd, 'x.txt') }], { ...DEFAULT_RULE, mode: 'affix', prefix: '', suffix: '', pattern: '' , find: '', replace: '' })
+    const r5 = await renameFiles([{ path: join(rd, 'x.txt') }], { ...DEFAULT_RULE, pattern: 'y' })
+    const okD = !r5.ok && existsSync(join(rd, 'x.txt')) && r4.renamed.length === 0
+    const pass = okA && okB && okC && okD
+    if (!pass) ok = false
+    console.log(`${pass ? 'PASS' : 'FAIL'}  rename  batch=${okA} replace=${okB} undo=${okC} collision=${okD}`)
+    results.push({ action: 'rename', status: pass ? 'PASS' : 'FAIL' })
+  }
+
+  // ---------- screenshot library: a new "Screenshot …" file in a watched folder gets collected
+  {
+    const watchDir = P('shots-src')
+    const libDir = P('library')
+    await fs.mkdir(watchDir, { recursive: true })
+    await saveSettings({ libraryEnabled: true, libraryDir: libDir, libraryExtraFolders: [watchDir], libraryCollectMode: 'move', libraryClipboard: false })
+    await startLibrary()
+    await wait(300)
+    await fs.copyFile(P('alpha.png'), join(watchDir, 'Screenshot 2026-10-12 at 15.00.00.png'))
+    await fs.copyFile(P('alpha.png'), join(watchDir, 'notes.png')) // extra folders take every image
+    let got = 0
+    for (let i = 0; i < 40 && got < 2; i++) {
+      await wait(250)
+      got = (await listLibrary()).items.length
+    }
+    stopLibrary()
+    const moved = !existsSync(join(watchDir, 'Screenshot 2026-10-12 at 15.00.00.png'))
+    const pass = got === 2 && moved
+    if (!pass) ok = false
+    console.log(`${pass ? 'PASS' : 'FAIL'}  library  collected=${got} moved=${moved}`)
+    results.push({ action: 'library', status: pass ? 'PASS' : 'FAIL' })
+    await saveSettings({ libraryDir: '', libraryExtraFolders: [] })
+  }
+
   // editor apply
   const ej = await startEditJob({
     sources: [P('doc.pdf')],

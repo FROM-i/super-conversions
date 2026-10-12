@@ -3,14 +3,15 @@ import type { ActionId } from '@shared/formats'
 import type { EngineStatus, Job, Settings, UpdateState } from '@shared/types'
 import { sc } from './lib/api'
 import { cls } from './lib/util'
-import { IcDown, IcGear, IcGrid, IcJobs, IcPdf } from './lib/icons'
+import { IcDown, IcGear, IcGrid, IcJobs, IcPdf, IcLibrary } from './lib/icons'
 import ConvertView from './views/ConvertView'
 import JobsView from './views/JobsView'
 import DownloadView from './views/DownloadView'
 import SettingsView from './views/SettingsView'
 import PdfEditor from './views/PdfEditor'
+import LibraryView from './views/LibraryView'
 
-type View = 'convert' | 'download' | 'edit' | 'jobs' | 'settings'
+type View = 'convert' | 'library' | 'download' | 'edit' | 'jobs' | 'settings'
 
 export default function App() {
   const [view, setView] = useState<View>('convert')
@@ -46,6 +47,7 @@ export default function App() {
     refreshEngines()
     sc.updateState().then(setUpd)
     const offU = sc.onUpdate(setUpd)
+    const offV = sc.onView((v) => setView(v as View))
     const off1 = sc.onJob((j) => setJobs((xs) => [j, ...xs.filter((x) => x.id !== j.id)].sort((a, b) => b.createdAt - a.createdAt)))
     const off2 = sc.onMainLoad((fs, action) => {
       setFiles((x) => [...new Set([...x, ...fs])])
@@ -64,6 +66,7 @@ export default function App() {
       off1()
       off2()
       offU()
+      offV()
       window.removeEventListener('sc-open-editor', openEd)
     }
   }, [refreshEngines])
@@ -96,6 +99,11 @@ export default function App() {
       if (!e.dataTransfer?.files.length) return
       e.preventDefault()
       const paths = [...e.dataTransfer.files].map((f) => sc.pathForFile(f)).filter(Boolean)
+      if (view === 'library') {
+        const n = await sc.libraryImport(paths)
+        toast(n ? `${n}개 이미지를 라이브러리에 담았습니다` : '이미지 파일만 담을 수 있습니다')
+        return
+      }
       const expanded = await sc.expand(paths)
       if (!expanded.length) return toast('지원하는 파일이 없습니다.')
       setFiles((x) => [...new Set([...x, ...expanded])])
@@ -131,6 +139,7 @@ export default function App() {
 
   const NAV: [View, string, React.ReactElement][] = [
     ['convert', '변환', <IcGrid key="g" />],
+    ['library', '스크린샷 라이브러리', <IcLibrary key="l" />],
     ['download', '영상 다운로드', <IcDown key="d" />],
     ['edit', 'PDF 편집', <IcPdf key="p" />],
     ['jobs', '작업 · 결과', <IcJobs key="j" />]
@@ -217,11 +226,12 @@ export default function App() {
             toast={toast}
           />
         )}
+        {view === 'library' && <LibraryView settings={settings} setSettings={setSettings} engines={engines} toast={toast} onOpenSettings={() => setView('settings')} />}
         {view === 'download' && <DownloadView incoming={links} clearIncoming={() => setLinks([])} settings={settings} setSettings={setSettings} jobs={jobs} toast={toast} />}
         {view === 'edit' && <PdfEditor path={editPath} settings={settings} onClose={() => (setEditPath(null), setView('convert'))} toast={toast} />}
         {view === 'jobs' && <JobsView jobs={jobs} />}
         {view === 'settings' && <SettingsView settings={settings} setSettings={setSettings} engines={engines} refreshEngines={refreshEngines} toast={toast} />}
-        {dragging && <div className="drop-veil">놓으면 추가됩니다</div>}
+        {dragging && <div className="drop-veil">{view === 'library' ? '라이브러리에 담기' : '놓으면 추가됩니다'}</div>}
       </main>
       {toastMsg && <div className="toast">{toastMsg}</div>}
     </div>

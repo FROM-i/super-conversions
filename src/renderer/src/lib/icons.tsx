@@ -17,3 +17,5 @@ export const IcTrash = () => (<I width="13" height="13" strokeWidth="2.2"><path 
 export const IcPlus = () => (<I width="16" height="16"><path d="M12 5v14M5 12h14" /></I>)
 export const IcUndo = () => (<I width="16" height="16"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 010 10h-3" /></I>)
 export const IcRedo = () => (<I width="16" height="16"><path d="M15 14l5-5-5-5M20 9H9a5 5 0 000 10h3" /></I>)
+export const IcLibrary = () => (<I><rect x="3" y="5" width="14" height="14" /><path d="M7 3h14v14" /><path d="M3 15l4-4 4 4 3-3 3 3" /></I>)
+export const IcEdit = () => (<I width="15" height="15"><path d="M4 20h4L19 9l-4-4L4 16z" /></I>)

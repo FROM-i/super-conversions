@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ActionId } from '@shared/formats'
-import type { ActionOptions, EditDocument, EngineStatus, Job, Settings, UpdateState, UrlInfo } from '@shared/types'
+import type { ActionOptions, EditDocument, EngineStatus, Job, LibraryItem, Settings, UpdateState, UrlInfo } from '@shared/types'
+import type { RenameItem, RenameRule, RenamePlanRow } from '@shared/rename'
+
+export interface RenameResult {
+  ok: boolean
+  renamed: { from: string; to: string }[]
+  errors: { from: string; error: string }[]
+  plan?: RenamePlanRow[]
+}
 
 const on = <A extends unknown[]>(ch: string, cb: (...a: A) => void) => {
   const fn = (_e: unknown, ...a: unknown[]) => cb(...(a as A))
@@ -52,6 +60,24 @@ const api = {
   overlayClose: () => ipcRenderer.invoke('overlay:close'),
   overlayOpenMain: (files: string[], action?: ActionId) => ipcRenderer.invoke('overlay:openMain', files, action),
   onMainLoad: (cb: (files: string[], action?: ActionId) => void) => on<[string[], ActionId | undefined]>('main:load', cb),
+  // library
+  libraryList: (): Promise<{ dir: string; items: LibraryItem[] }> => ipcRenderer.invoke('library:list'),
+  libraryFolders: (): Promise<{ path: string; nameFilter: boolean; label: string }[]> => ipcRenderer.invoke('library:folders'),
+  libraryImport: (paths: string[]): Promise<number> => ipcRenderer.invoke('library:import', paths),
+  libraryOpen: () => ipcRenderer.invoke('library:open'),
+  pickFolder: (): Promise<string | null> => ipcRenderer.invoke('library:pickFolder'),
+  onLibrary: (cb: () => void) => on<[]>('library:changed', cb),
+  onView: (cb: (view: string) => void) => on<[string]>('main:view', cb),
+  thumbCached: (p: string, size?: number): Promise<string | null> => ipcRenderer.invoke('files:thumbCached', p, size),
+  imageSize: (p: string): Promise<{ width: number; height: number } | null> => ipcRenderer.invoke('files:imageSize', p),
+  trash: (paths: string[]) => ipcRenderer.invoke('files:trash', paths),
+  copyImage: (p: string) => ipcRenderer.invoke('files:copyImage', p),
+  startDrag: (paths: string[]) => ipcRenderer.send('files:startDrag', paths),
+  exists: (paths: string[]): Promise<string[]> => ipcRenderer.invoke('files:exists', paths),
+  // rename
+  renameBatch: (items: RenameItem[], rule: RenameRule): Promise<RenameResult> => ipcRenderer.invoke('files:renameBatch', items, rule),
+  renameOne: (from: string, newName: string): Promise<RenameResult> => ipcRenderer.invoke('files:renameOne', from, newName),
+  renameUndo: (): Promise<RenameResult> => ipcRenderer.invoke('files:renameUndo'),
   // render worker
   onRenderRequest: (cb: (id: string, req: Record<string, unknown>) => void) => on<[string, Record<string, unknown>]>('render:request', cb),
   renderReply: (id: string, ok: boolean, payload: unknown) => ipcRenderer.send('render:reply', id, ok, payload),

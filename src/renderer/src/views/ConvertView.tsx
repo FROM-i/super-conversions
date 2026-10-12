@@ -5,6 +5,7 @@ import { sc } from '../lib/api'
 import { baseName, cls, fmtBytes, toneOfPath } from '../lib/util'
 import GridMenu, { type GridPick } from '../components/GridMenu'
 import OptionsPanel from '../components/OptionsPanel'
+import RenameModal from '../components/RenameModal'
 import { IcCheck, IcFile, IcFolder, IcLink, IcX } from '../lib/icons'
 
 interface Props {
@@ -30,6 +31,7 @@ export default function ConvertView(p: Props) {
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const [sizes, setSizes] = useState<Record<string, number>>({})
   const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [renaming, setRenaming] = useState<string[] | null>(null)
   const tilesRef = useRef<HTMLDivElement>(null)
 
   // latest result per input path
@@ -68,12 +70,21 @@ export default function ConvertView(p: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (grid || panel || (e.target as HTMLElement)?.closest?.('input,textarea')) return
+      if (grid || panel || renaming || (e.target as HTMLElement)?.closest?.('input,textarea')) return
       const mod = e.metaKey || e.ctrlKey
       if (e.key === ' ' && files.length) {
         e.preventDefault()
         const r = tilesRef.current?.getBoundingClientRect()
         openGridAt(r ? r.left + r.width / 2 : innerWidth / 2, r ? r.top + r.height / 2 : innerHeight / 2, targets)
+      } else if (e.key === 'F2' && targets.length) {
+        e.preventDefault()
+        setRenaming(selected.length ? selected : files)
+      } else if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        sc.renameUndo().then((r) => {
+          if (r.renamed.length) applyRenamed(r.renamed)
+          p.toast(r.renamed.length ? `이름 변경 ${r.renamed.length}개를 되돌렸습니다` : r.errors[0]?.error ?? '되돌릴 내용이 없습니다')
+        })
       } else if (mod && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         setSel(new Set(files))
@@ -113,6 +124,22 @@ export default function ConvertView(p: Props) {
       fs = [f]
     }
     openGridAt(e.clientX, e.clientY, fs)
+  }
+
+  const applyRenamed = (renamed: { from: string; to: string }[]) => {
+    const m = new Map(renamed.map((r) => [r.from, r.to]))
+    setFiles((x) => x.map((f) => m.get(f) ?? f))
+    setSel((s) => new Set([...s].map((f) => m.get(f) ?? f)))
+    setThumbs((t) => {
+      const n = { ...t }
+      for (const [a, b] of m) n[b] = t[a] ?? null
+      return n
+    })
+    setSizes((z) => {
+      const n = { ...z }
+      for (const [a, b] of m) n[b] = z[a]
+      return n
+    })
   }
 
   const pick = (g: GridPick) => {
@@ -207,6 +234,9 @@ export default function ConvertView(p: Props) {
           <span className="title">{files.length}개 파일</span>
           {selected.length > 0 && <span className="chip">{selected.length}개 선택</span>}
           <span className="grow" />
+          <button className="btn ghost" onClick={() => setRenaming(selected.length ? selected : files)} title="선택한 파일(없으면 전체)의 이름을 바꿉니다">
+            이름 변경 <span className="kbd">F2</span>
+          </button>
           <button className="btn ghost" onClick={() => add('files')}>
             <IcFile /> 추가
           </button>
@@ -305,7 +335,7 @@ export default function ConvertView(p: Props) {
         </div>
         <div className="statusbar">
           <span>
-            파일 <b>우클릭</b> 또는 <span className="kbd">Space</span> → 변환 그리드 · 숫자패드 <span className="kbd">1</span>–<span className="kbd">9</span> 로 바로 선택
+            파일 <b>우클릭</b> 또는 <span className="kbd">Space</span> → 변환 그리드 · 숫자패드 <span className="kbd">1</span>–<span className="kbd">9</span> 로 바로 선택 · <span className="kbd">F2</span> 이름 변경
           </span>
           <span className="grow" />
           <span>{cats.size > 1 ? '여러 종류 선택됨 → 그리드에서 종류를 먼저 고릅니다' : ''}</span>
@@ -322,6 +352,7 @@ export default function ConvertView(p: Props) {
         />
       )}
       {grid && <GridMenu files={grid.files} at={{ x: grid.x, y: grid.y }} onPick={pick} onClose={() => setGrid(null)} />}
+      {renaming && <RenameModal items={renaming.map((path) => ({ path }))} onClose={() => setRenaming(null)} onDone={applyRenamed} toast={p.toast} />}
     </div>
   )
 }

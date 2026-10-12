@@ -13,9 +13,15 @@ import { pageInfo } from './engines/pdf'
 import { ffmpegPath, findSoffice, probeHwEncoders, ytdlpBin, updateYtdlp, isMac, isWin } from './tools'
 import { setShellIntegration } from './integration'
 import { disposeRenderWorker } from './render'
+import { startLibrary, stopLibrary, listLibrary, importToLibrary, cachedThumb, imageSize, detectShotFolders, libraryDir, writeClipboardImage } from './library'
+import { renameFiles, renameOne, undoLastRename } from './rename'
+import { ensureTray, refreshTray, destroyTray, keepAlive, applyLoginItem } from './tray'
+import type { RenameItem, RenameRule } from '@shared/rename'
 import { existsSync } from 'fs'
 
 let main: BrowserWindow | null = null
+let quitting = false
+let startHidden = false
 let overlay: BrowserWindow | null = null
 let pendingShellFiles: string[] = []
 let shellTimer: NodeJS.Timeout | null = null
@@ -77,20 +83,35 @@ function createMain() {
     icon: nativeImage.createFromPath(join(__dirname, '../../build/icon.png')),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false }
   })
-  main.once('ready-to-show', () => main?.show())
+  main.once('ready-to-show', () => {
+    if (!startHidden) main?.show()
+    startHidden = false
+  })
+  main.on('close', (e) => {
+    // keep collecting screenshots in the tray instead of quitting
+    if (!quitting && keepAlive()) {
+      e.preventDefault()
+      main?.hide()
+    }
+  })
   main.on('closed', () => {
     main = null
-    if (!isMac && !(overlay && !overlay.isDestroyed())) app.quit() // hidden render worker must not keep us alive
+    if (!isMac && !keepAlive() && !(overlay && !overlay.isDestroyed())) app.quit() // hidden render worker must not keep us alive
   })
   loadRenderer(main, 'main')
 }
 
-function focusMain() {
+function focusMain(view?: string) {
   if (!main) createMain()
   else {
     if (main.isMinimized()) main.restore()
     main.show()
     main.focus()
+  }
+  if (view) {
+    const send = () => main?.webContents.send('main:view', view)
+    if (main!.webContents.isLoading()) main!.webContents.once('did-finish-load', send)
+    else send()
   }
 }
 
@@ -128,7 +149,7 @@ function openOverlay(files: string[]) {
   })
   overlay.on('closed', () => {
     overlay = null
-    if (!main) app.quit()
+    if (!main && !keepAlive()) app.quit()
   })
   overlay.webContents.once('did-finish-load', () => overlay?.webContents.send('overlay:files', files))
   loadRenderer(overlay, 'overlay')
@@ -189,10 +210,61 @@ async function thumbnail(path: string): Promise<string | null> {
 // ---------------------------------------------------------------- IPC
 function registerIpc() {
   ipcMain.handle('settings:get', () => getSettings())
-  ipcMain.handle('settings:save', (_e, patch: Partial<Settings>) => {
+  ipcMain.handle('settings:save', async (_e, patch: Partial<Settings>) => {
     if (patch.autoUpdateApp !== undefined) setUpdaterEnabled(patch.autoUpdateApp)
-    return saveSettings(patch)
+    const next = await saveSettings(patch)
+    const libKeys: (keyof Settings)[] = ['libraryEnabled', 'libraryDir', 'libraryClipboard', 'libraryExtraFolders', 'libraryCollectMode']
+    if (libKeys.some((k) => k in patch)) {
+      next.libraryEnabled ? await startLibrary() : stopLibrary()
+      main?.webContents.send('library:changed')
+    }
+    if ('launchAtLogin' in patch) applyLoginItem()
+    if ('libraryEnabled' in patch || 'closeToTray' in patch) syncTray()
+    return next
   })
+
+  // ---- library
+  ipcMain.handle('library:list', () => listLibrary())
+  ipcMain.handle('library:folders', () => detectShotFolders())
+  ipcMain.handle('library:import', (_e, paths: string[]) => importToLibrary(paths))
+  ipcMain.handle('library:open', () => shell.openPath(libraryDir()))
+  ipcMain.handle('library:pickFolder', async () => {
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() ?? main!, { properties: ['openDirectory', 'createDirectory'] })
+    return r.canceled ? null : r.filePaths[0]
+  })
+  ipcMain.handle('files:thumbCached', (_e, p: string, size?: number) => cachedThumb(p, size ?? 360))
+  ipcMain.handle('files:imageSize', (_e, p: string) => imageSize(p))
+  ipcMain.handle('files:trash', async (_e, paths: string[]) => {
+    for (const p of paths) await shell.trashItem(p)
+    main?.webContents.send('library:changed')
+    return true
+  })
+  ipcMain.handle('files:copyImage', async (_e, p: string) => {
+    await writeClipboardImage(p)
+    return true
+  })
+  ipcMain.on('files:startDrag', (e, paths: string[]) => {
+    const icon = nativeImage.createFromPath(paths[0]).resize({ width: 64 })
+    e.sender.startDrag({ file: paths[0], files: paths, icon: icon.isEmpty() ? nativeImage.createFromPath(join(__dirname, '../../build/icon.png')).resize({ width: 64 }) : icon })
+  })
+
+  // ---- rename
+  ipcMain.handle('files:renameBatch', async (_e, items: RenameItem[], rule: RenameRule) => {
+    const r = await renameFiles(items, rule)
+    main?.webContents.send('library:changed')
+    return r
+  })
+  ipcMain.handle('files:renameOne', async (_e, from: string, newName: string) => {
+    const r = await renameOne(from, newName)
+    main?.webContents.send('library:changed')
+    return r
+  })
+  ipcMain.handle('files:renameUndo', async () => {
+    const r = await undoLastRename()
+    main?.webContents.send('library:changed')
+    return r
+  })
+  ipcMain.handle('files:exists', (_e, paths: string[]) => paths.filter((p) => existsSync(p)))
   ipcMain.handle('engines:status', () => engineStatus())
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }))
 
@@ -279,10 +351,16 @@ app.whenReady().then(async () => {
     app.exit(ok ? 0 : 1)
     return
   }
+  startHidden = process.argv.includes('--hidden')
+  applyLoginItem()
+  startLibrary().catch(() => undefined)
+  syncTray()
   const launchFiles = [...pendingShellFiles, ...filesFromArgv(process.argv)]
   pendingShellFiles = []
   if (launchFiles.length && process.argv.includes('--sc-grid')) {
     openOverlay(await expandPaths(launchFiles))
+  } else if (startHidden) {
+    // launched at login: stay in the tray, collect screenshots
   } else {
     createMain()
     if (launchFiles.length) {
@@ -298,9 +376,12 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  if (!isMac) app.quit()
+  if (!isMac && !keepAlive()) app.quit()
 })
 app.on('before-quit', () => {
+  quitting = true
+  stopLibrary()
+  destroyTray()
   disposeRenderWorker()
   officeWorker?.shutdown()
 })
@@ -337,11 +418,45 @@ async function devShots(dir: string, files: string[]) {
     await wait(3000)
     await shot('06-editor')
   }
-  await js(`document.querySelectorAll('.rail button')[1].click()`)
+  await js(`document.querySelectorAll('.rail button')[2].click()`)
   await wait(600)
   await shot('07-download')
-  await js(`document.querySelectorAll('.rail button')[4].click()`)
+  await js(`document.querySelectorAll('.rail button')[5].click()`)
   await wait(900)
   await shot('08-settings')
+  // library demo: seed screenshots
+  const libDir = libraryDir()
+  await fs.mkdir(libDir, { recursive: true })
+  const imgs = files.filter((f) => /\.(jpe?g|png|webp)$/i.test(f))
+  let k = 0
+  for (const day of [0, 0, 0, 0, 1, 1, 1]) {
+    const src = imgs[k++ % imgs.length]
+    const d = new Date(Date.now() - day * 864e5 - k * 600e3)
+    const p2 = (n: number) => String(n).padStart(2, '0')
+    const dst = join(libDir, `스크린샷 ${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}.${p2(d.getMinutes())}.${p2(k)}${src.slice(src.lastIndexOf('.'))}`)
+    await fs.copyFile(src, dst)
+    await fs.utimes(dst, d, d)
+  }
+  await js(`document.querySelectorAll('.rail button')[1].click()`)
+  await wait(2500)
+  await shot('09-library')
+  await js(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }))`)
+  await wait(300)
+  await js(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }))`)
+  await wait(900)
+  await shot('10-rename')
+  await js(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+  await wait(300)
+  await js(`document.querySelectorAll('.rail button')[5].click()`)
+  await wait(500)
+  await js(`document.querySelectorAll('.settings nav button')[1].click()`)
+  await wait(900)
+  await shot('11-library-settings')
   app.exit(0)
+}
+
+function syncTray() {
+  if (keepAlive()) ensureTray((v) => focusMain(v))
+  else destroyTray()
+  refreshTray((v) => focusMain(v))
 }

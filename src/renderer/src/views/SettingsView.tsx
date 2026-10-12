@@ -6,9 +6,10 @@ import { Field, Seg, Text, Toggle } from '../components/Fields'
 import SignatureModal from '../components/SignatureModal'
 import { IcPlus, IcTrash } from '../lib/icons'
 
-type Sec = 'sign' | 'output' | 'engine' | 'fonts' | 'download' | 'system'
+type Sec = 'sign' | 'library' | 'output' | 'engine' | 'fonts' | 'download' | 'system'
 const SECS: [Sec, string][] = [
   ['sign', '서명·직인'],
+  ['library', '스크린샷 라이브러리'],
   ['output', '저장 규칙'],
   ['engine', '변환 엔진'],
   ['fonts', '폰트'],
@@ -29,6 +30,10 @@ export default function SettingsView({ settings, setSettings, engines, refreshEn
   const [modal, setModal] = useState(false)
   const [sigImgs, setSigImgs] = useState<Record<string, string>>({})
   const [info, setInfo] = useState<{ version: string; platform: string } | null>(null)
+  const [folders, setFolders] = useState<{ path: string; nameFilter: boolean; label: string }[]>([])
+  useEffect(() => {
+    if (sec === 'library') sc.libraryFolders().then(setFolders)
+  }, [sec, settings.libraryExtraFolders])
   const save = async (p: Partial<Settings>) => setSettings(await sc.saveSettings(p))
 
   useEffect(() => {
@@ -98,6 +103,68 @@ export default function SettingsView({ settings, setSettings, engines, refreshEn
                   <IcPlus /> 새 서명·직인
                 </span>
               </button>
+            </div>
+          </section>
+        )}
+
+        {sec === 'library' && (
+          <section>
+            <h2>스크린샷 라이브러리</h2>
+            <p className="lead">운영체제가 스크린샷을 저장하는 폴더를 지켜보다가, 새 스크린샷이 생기면 라이브러리 폴더로 모읍니다.</p>
+            <div className="card">
+              <Toggle on={settings.libraryEnabled} onChange={(v) => save({ libraryEnabled: v })} label="스크린샷 자동 수집" />
+              <Field label="라이브러리 폴더" help="모인 스크린샷이 저장되는 곳입니다. 여기서 변환한 결과는 이 폴더 안의 SUPER CONVERSIONS/V번호에 저장됩니다.">
+                <div className="row">
+                  <Text value={settings.libraryDir} onChange={(v) => save({ libraryDir: v })} placeholder="사진/SUPER CONVERSIONS Library" />
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      const d = await sc.pickFolder()
+                      if (d) save({ libraryDir: d })
+                    }}
+                  >
+                    변경
+                  </button>
+                </div>
+              </Field>
+              <Field label="모으는 방식" help={settings.libraryCollectMode === 'move' ? '원래 위치(바탕화면 등)에서 라이브러리로 옮깁니다. 바탕화면이 깔끔해집니다.' : '원래 위치에 그대로 두고 라이브러리에 사본을 만듭니다.'}>
+                <Seg value={settings.libraryCollectMode} options={[['move', '옮기기'], ['copy', '복사하기']]} onChange={(v) => save({ libraryCollectMode: v })} />
+              </Field>
+              <Field label="지켜보는 폴더" help="바탕화면처럼 다른 파일도 있는 폴더는 이름이 '스크린샷·Screenshot·화면 캡처'로 시작하는 이미지만 모읍니다.">
+                <div style={{ display: 'grid', gap: 4 }}>
+                  {folders.map((f) => (
+                    <div key={f.path} className="row" style={{ fontSize: 'var(--fs-s)' }}>
+                      <span className="chip">{f.label}</span>
+                      <span className="mono muted grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.path}>
+                        {f.path}
+                      </span>
+                      {settings.libraryExtraFolders.includes(f.path) && (
+                        <button className="btn ghost" style={{ height: 24 }} onClick={() => save({ libraryExtraFolders: settings.libraryExtraFolders.filter((x) => x !== f.path) })}>
+                          빼기
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    className="btn ghost"
+                    style={{ justifySelf: 'start' }}
+                    onClick={async () => {
+                      const d = await sc.pickFolder()
+                      if (d && !settings.libraryExtraFolders.includes(d)) save({ libraryExtraFolders: [...settings.libraryExtraFolders, d] })
+                    }}
+                  >
+                    + 폴더 추가 (캡처 도구가 저장하는 곳 등)
+                  </button>
+                </div>
+              </Field>
+              <Toggle
+                on={settings.libraryClipboard}
+                onChange={(v) => save({ libraryClipboard: v })}
+                label="클립보드에 복사된 이미지도 수집"
+                help="파일로 저장하지 않고 클립보드로만 복사하는 캡처(예: Win ⇧ S에서 자동 저장을 끈 경우, ⌘ ⌃ ⇧ 4)를 잡아냅니다. 웹에서 복사한 이미지도 함께 모입니다."
+              />
+              <Toggle on={settings.closeToTray} onChange={(v) => save({ closeToTray: v })} label="창을 닫아도 트레이에서 계속 수집" help={isMac ? '메뉴 막대 아이콘에서 다시 열 수 있습니다.' : '작업 표시줄 오른쪽 트레이 아이콘에서 다시 열 수 있습니다.'} />
+              <Toggle on={settings.launchAtLogin} onChange={(v) => save({ launchAtLogin: v })} label="컴퓨터를 켜면 자동으로 시작" help="창 없이 트레이에서 시작해 바로 수집합니다." />
             </div>
           </section>
         )}

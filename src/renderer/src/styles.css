@@ -476,6 +476,7 @@ textarea {
   height: 100%;
 }
 .board-main {
+  position: relative;
   display: grid;
   grid-template-rows: auto 1fr auto;
   min-width: 0;
@@ -1474,4 +1475,111 @@ textarea.inp {
 .overlay-root .grid-menu {
   position: relative;
   --cell: 112px;
+}
+
+/* ------------------------------------------------------------ library */
+.lib-scroll {
+  overflow: auto;
+  min-height: 0;
+  padding-bottom: 24px;
+}
+.lib-group {
+  padding: 0 20px;
+}
+.lib-day {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0 8px;
+  background: var(--bg);
+  font-size: var(--fs-s);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+.lib-tiles {
+  padding: 0;
+  overflow: visible;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+}
+.lib-tiles .tile .thumb {
+  background: repeating-conic-gradient(var(--tile) 0% 25%, var(--surface) 0% 50%) 50% / 12px 12px;
+}
+.lib-tiles .tile .thumb img {
+  object-fit: contain;
+}
+.lib-empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+  min-height: 60vh;
+}
+.lib-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  background: rgba(10, 10, 10, 0.88);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 32px;
+  animation: fade 0.15s;
+}
+.lib-preview img {
+  max-width: 92vw;
+  max-height: 84vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ------------------------------------------------------------ rename preview */
+.rename-preview {
+  border: 1px solid var(--line);
+  max-height: 380px;
+  overflow: auto;
+  background: var(--bg);
+}
+.rp-row {
+  display: grid;
+  grid-template-columns: 1fr 18px 1fr;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-s);
+  align-items: center;
+}
+.rp-row:last-child {
+  border-bottom: 0;
+}
+.rp-row .old {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-row .arr {
+  color: var(--muted);
+  text-align: center;
+}
+.rp-row .new {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.rp-row.same .new {
+  color: var(--muted);
+  font-weight: 400;
+}
+.rp-row.err .new {
+  color: var(--err);
+}
+.rp-row em {
+  font-style: normal;
+  font-weight: 400;
 }

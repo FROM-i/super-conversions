@@ -159,6 +159,22 @@ export interface Settings {
   overlayRunsImmediately: boolean
   lastAction?: ActionId
   concurrency: number
+  // screenshot library
+  libraryEnabled: boolean
+  libraryDir: string
+  libraryCollectMode: 'move' | 'copy'
+  libraryClipboard: boolean
+  libraryExtraFolders: string[]
+  launchAtLogin: boolean
+  closeToTray: boolean
+}
+
+export interface LibraryItem {
+  path: string
+  name: string
+  size: number
+  mtime: number
+  ctime: number
 }
 
 // ---------- Jobs ----------
