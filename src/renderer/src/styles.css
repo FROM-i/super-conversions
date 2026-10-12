@@ -40,6 +40,12 @@
   --on-pdf: #111111;
 
   --u: 8px;
+  /* type scale — hierarchy comes from spacing, rules and tone, not mass */
+  --fs-xs: 10.5px;
+  --fs-s: 11.5px;
+  --fs-m: 13px;
+  --fs-l: 15px;
+  --fs-xl: 19px;
   --rail: 72px;
   --top: 52px;
   --ease: cubic-bezier(0.2, 0.9, 0.1, 1);
@@ -137,7 +143,7 @@ textarea {
 }
 .cap {
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
@@ -193,9 +199,9 @@ textarea {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  font-size: 10.5px;
 }
 .wordmark .sq {
   display: grid;
@@ -224,7 +230,7 @@ textarea {
   padding: 0 8px;
   border: 1px solid var(--line);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -235,6 +241,18 @@ textarea {
 }
 .chip.on .dot {
   background: var(--ok);
+}
+.chip.update {
+  border-color: var(--ink);
+  color: var(--ink);
+  cursor: pointer;
+}
+.chip.update .dot {
+  background: var(--doc);
+}
+.chip.update:hover {
+  background: var(--ink);
+  color: var(--inverse);
 }
 .chip.warn .dot {
   background: var(--video);
@@ -276,7 +294,7 @@ textarea {
   background: var(--video);
   color: #111;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   display: grid;
   place-items: center;
 }
@@ -286,7 +304,7 @@ textarea {
   background: var(--ink);
   color: var(--inverse);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   padding: 4px 8px;
   white-space: nowrap;
   opacity: 0;
@@ -317,7 +335,7 @@ textarea {
   padding: 32px;
 }
 .dropzone {
-  width: min(560px, 70vh);
+  width: min(460px, 62vh);
   aspect-ratio: 1;
   border: 1px solid var(--line-strong);
   display: grid;
@@ -358,10 +376,10 @@ textarea {
   text-align: center;
 }
 .dropzone .hero .big {
-  font-size: 64px;
-  font-weight: 860;
-  letter-spacing: -0.04em;
-  line-height: 0.9;
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
 }
 .dropzone .hero .sub {
   color: var(--muted);
@@ -369,15 +387,14 @@ textarea {
 }
 .mosaic {
   display: grid;
-  grid-template-columns: repeat(4, 22px);
-  gap: 4px;
+  grid-template-columns: repeat(4, 8px);
+  gap: 3px;
 }
 .mosaic i {
-  width: 22px;
-  height: 22px;
+  width: 8px;
+  height: 8px;
   display: block;
   background: var(--tone);
-  animation: pop 2.4s var(--ease) infinite;
 }
 .mosaic i:nth-child(2) {
   animation-delay: 0.15s;
@@ -404,9 +421,9 @@ textarea {
   border-top: 1px solid var(--line-strong);
 }
 .dropzone .actions button {
-  height: 64px;
-  font-weight: 700;
-  font-size: 13px;
+  height: 52px;
+  font-weight: 400;
+  font-size: var(--fs-m);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -427,7 +444,7 @@ textarea {
   margin-top: 20px;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .legend span {
   display: inline-flex;
@@ -442,12 +459,12 @@ textarea {
 .drop-veil {
   position: absolute;
   inset: 12px;
-  border: 2px dashed var(--ink);
+  border: 1px dashed var(--ink);
   background: color-mix(in srgb, var(--bg) 70%, transparent);
   display: grid;
   place-items: center;
-  font-size: 28px;
-  font-weight: 800;
+  font-size: var(--fs-l);
+  font-weight: 500;
   z-index: 40;
   pointer-events: none;
 }
@@ -471,15 +488,15 @@ textarea {
   border-bottom: 1px solid var(--line);
 }
 .toolbar .title {
-  font-weight: 800;
-  font-size: 15px;
+  font-weight: 500;
+  font-size: var(--fs-m);
   margin-right: 8px;
 }
 .btn {
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
-  font-weight: 650;
+  font-weight: 500;
   font-size: 12px;
   display: inline-flex;
   align-items: center;
@@ -545,7 +562,7 @@ textarea {
 }
 .tile.sel {
   border-color: var(--ink);
-  box-shadow: inset 0 0 0 2px var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
 }
 .tile .thumb {
   display: grid;
@@ -560,10 +577,10 @@ textarea {
   object-fit: contain;
 }
 .tile .glyph {
-  font-size: 26px;
-  font-weight: 860;
-  letter-spacing: -0.03em;
-  color: var(--ink-2);
+  font-size: var(--fs-s);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--muted);
 }
 .tile .meta {
   padding: 7px 9px 8px;
@@ -573,7 +590,7 @@ textarea {
 }
 .tile .name {
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -588,10 +605,10 @@ textarea {
   left: 8px;
   background: var(--tone);
   color: var(--on-tone);
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 6px;
-  letter-spacing: 0.06em;
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  letter-spacing: 0.08em;
 }
 .tile .check {
   position: absolute;
@@ -648,7 +665,7 @@ textarea {
   width: max-content;
   padding: 3px 8px;
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 600;
   background: var(--ink);
   color: var(--inverse);
   letter-spacing: 0.06em;
@@ -679,7 +696,7 @@ textarea {
   border: 1px solid var(--line);
   border-bottom-width: 2px;
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--ink-2);
   margin: 0 2px;
 }
@@ -697,7 +714,7 @@ textarea {
   grid-template-columns: repeat(3, var(--cell));
   grid-template-rows: repeat(3, var(--cell));
   gap: 6px;
-  --cell: 116px;
+  --cell: 104px;
   filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.25));
 }
 .grid-menu .cell {
@@ -726,27 +743,27 @@ textarea {
   top: 8px;
   right: 9px;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--muted);
 }
 .grid-menu .cell .lab {
-  font-size: 25px;
-  font-weight: 860;
-  letter-spacing: -0.035em;
+  font-size: var(--fs-l);
+  font-weight: 500;
+  letter-spacing: 0.04em;
   line-height: 1;
-  margin-top: 18px;
+  margin-top: 22px;
 }
 .grid-menu .cell .hint {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--muted);
 }
 .grid-menu .cell .bar {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 4px;
+  left: 11px;
+  top: 10px;
+  width: 6px;
+  height: 6px;
   background: var(--tone);
 }
 .grid-menu .cell:not(.center):not(.empty):hover,
@@ -773,7 +790,7 @@ textarea {
   opacity: 0.6;
 }
 .grid-menu .cell.center .lab {
-  font-size: 30px;
+  font-size: var(--fs-l);
 }
 .grid-menu .cell.empty {
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -791,7 +808,7 @@ textarea {
 }
 .grid-menu .cell .count {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
   opacity: 0.7;
 }
 .grid-menu .cell.done {
@@ -834,14 +851,14 @@ textarea {
   position: absolute;
   left: 0;
   top: 0;
-  height: 4px;
+  height: 2px;
   width: 100%;
   background: var(--tone);
 }
 .panel-head .big {
-  font-size: 34px;
-  font-weight: 860;
-  letter-spacing: -0.04em;
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  letter-spacing: 0.02em;
   line-height: 1;
   margin: 6px 0 4px;
 }
@@ -867,7 +884,7 @@ textarea {
 .field > label,
 .field > .lbl {
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--ink-2);
   display: flex;
   justify-content: space-between;
@@ -885,7 +902,7 @@ textarea {
 .seg button {
   height: 30px;
   font-size: 11.5px;
-  font-weight: 650;
+  font-weight: 500;
   padding: 0 6px;
   white-space: nowrap;
 }
@@ -932,9 +949,9 @@ textarea.inp {
   cursor: pointer;
 }
 .toggle .sw {
-  width: 36px;
-  height: 20px;
-  border: 1.5px solid var(--ink);
+  width: 32px;
+  height: 18px;
+  border: 1px solid var(--ink);
   position: relative;
   flex: none;
 }
@@ -943,16 +960,16 @@ textarea.inp {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 13px;
-  height: 13px;
-  background: var(--ink);
+  width: 12px;
+  height: 12px;
+  background: var(--muted);
   transition: 0.18s var(--ease);
 }
 .toggle.on .sw {
   background: var(--ink);
 }
 .toggle.on .sw::after {
-  left: 18px;
+  left: 16px;
   background: var(--inverse);
 }
 .anchor9 {
@@ -983,9 +1000,9 @@ textarea.inp {
   padding: 28px 32px 40px;
 }
 .page h1 {
-  font-size: 30px;
-  font-weight: 860;
-  letter-spacing: -0.035em;
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  letter-spacing: -0.01em;
   margin-bottom: 4px;
 }
 .page .lead {
@@ -1012,12 +1029,12 @@ textarea.inp {
   display: grid;
   place-items: center;
   font-size: 10px;
-  font-weight: 860;
+  font-weight: 600;
   letter-spacing: 0.02em;
   flex: none;
 }
 .job-head .t {
-  font-weight: 750;
+  font-weight: 500;
 }
 .job-file {
   display: grid;
@@ -1031,7 +1048,7 @@ textarea.inp {
   border-top: 0;
 }
 .job-file .fn {
-  font-weight: 600;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1093,9 +1110,9 @@ textarea.inp {
   user-select: text;
 }
 .paste .go {
-  width: 140px;
+  width: 120px;
   border-left: 1px solid var(--line-strong);
-  font-weight: 800;
+  font-weight: 600;
   font-size: 14px;
   display: grid;
   place-items: center;
@@ -1134,7 +1151,7 @@ textarea.inp {
   display: grid;
   place-items: center;
   overflow: hidden;
-  font-weight: 860;
+  font-weight: 600;
   font-size: 12px;
 }
 .link .th img {
@@ -1143,7 +1160,7 @@ textarea.inp {
   object-fit: cover;
 }
 .link .tt {
-  font-weight: 700;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1165,7 +1182,7 @@ textarea.inp {
 .settings nav button {
   text-align: left;
   padding: 9px 12px;
-  font-weight: 650;
+  font-weight: 500;
   color: var(--ink-2);
 }
 .settings nav button.on {
@@ -1176,9 +1193,9 @@ textarea.inp {
   max-width: 720px;
 }
 .settings h2 {
-  font-size: 22px;
-  font-weight: 830;
-  letter-spacing: -0.03em;
+  font-size: var(--fs-l);
+  font-weight: 500;
+  letter-spacing: 0;
   margin-bottom: 4px;
 }
 .settings .card {
@@ -1215,7 +1232,7 @@ textarea.inp {
   gap: 6px;
   padding: 8px 10px;
   border-top: 1px solid var(--line);
-  font-weight: 650;
+  font-weight: 500;
 }
 .pad {
   border: 1px solid var(--line-strong);
@@ -1251,7 +1268,7 @@ textarea.inp {
   align-items: center;
   padding: 14px 18px;
   border-bottom: 1px solid var(--line);
-  font-weight: 800;
+  font-weight: 600;
 }
 .modal-body {
   padding: 16px 18px;
@@ -1271,7 +1288,7 @@ textarea.inp {
   background: var(--ink);
   color: var(--inverse);
   padding: 10px 16px;
-  font-weight: 650;
+  font-weight: 500;
   z-index: 300;
   animation: fade 0.2s;
   max-width: 80vw;
@@ -1307,7 +1324,7 @@ textarea.inp {
   height: 34px;
   display: grid;
   place-items: center;
-  font-weight: 800;
+  font-weight: 600;
   font-size: 12px;
   position: relative;
 }
@@ -1367,7 +1384,7 @@ textarea.inp {
   background: var(--ink);
   color: var(--inverse);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   padding: 1px 5px;
 }
 .ed-thumb .ops {
@@ -1456,5 +1473,5 @@ textarea.inp {
 }
 .overlay-root .grid-menu {
   position: relative;
-  --cell: 128px;
+  --cell: 112px;
 }

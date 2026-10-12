@@ -324,7 +324,7 @@ export default function PdfEditor({ path, settings, onClose, toast }: Props) {
     return (
       <div className="dropzone-wrap">
         <div className="empty-state" style={{ maxWidth: 520 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', marginBottom: 8 }}>PDF 편집</div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--ink)', marginBottom: 8 }}>PDF 편집</div>
           변환 보드에서 PDF를 더블클릭하거나, 우클릭 그리드의 EDIT 칸을 누르세요.
           <div style={{ marginTop: 16 }}>
             <button
@@ -408,7 +408,7 @@ export default function PdfEditor({ path, settings, onClose, toast }: Props) {
         <button className="tool" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="축소 (-)">
           −
         </button>
-        <span className="mono" style={{ width: 44, textAlign: 'center', fontWeight: 700 }}>
+        <span className="mono" style={{ width: 44, textAlign: 'center', fontWeight: 500 }}>
           {Math.round(zoom * 100)}%
         </span>
         <button className="tool" onClick={() => setZoom((z) => Math.min(4, z + 0.25))} title="확대 (+)">

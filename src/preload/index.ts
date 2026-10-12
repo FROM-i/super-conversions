@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ActionId } from '@shared/formats'
-import type { ActionOptions, EditDocument, EngineStatus, Job, Settings, UrlInfo } from '@shared/types'
+import type { ActionOptions, EditDocument, EngineStatus, Job, Settings, UpdateState, UrlInfo } from '@shared/types'
 
 const on = <A extends unknown[]>(ch: string, cb: (...a: A) => void) => {
   const fn = (_e: unknown, ...a: unknown[]) => cb(...(a as A))
@@ -14,7 +14,10 @@ const api = {
   saveSettings: (p: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke('settings:save', p),
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke('engines:status'),
   appInfo: (): Promise<{ version: string; platform: string; packaged: boolean }> => ipcRenderer.invoke('app:info'),
-  checkUpdate: (): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('app:checkUpdate'),
+  updateState: (): Promise<UpdateState> => ipcRenderer.invoke('update:state'),
+  checkUpdate: (): Promise<UpdateState> => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdate: (cb: (s: UpdateState) => void) => on<[UpdateState]>('update:state', cb),
   // files
   pathForFile: (f: File): string => webUtils.getPathForFile(f),
   pick: (kind: 'files' | 'folder'): Promise<string[]> => ipcRenderer.invoke('files:pick', kind),

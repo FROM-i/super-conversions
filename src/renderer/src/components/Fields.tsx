@@ -31,7 +31,7 @@ export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (
   return (
     <div className="field">
       <div className={cls('toggle', on && 'on')} onClick={() => onChange(!on)} role="switch" aria-checked={on}>
-        <span className="lbl" style={{ fontSize: 11.5, fontWeight: 700 }}>
+        <span className="lbl" style={{ fontSize: 11.5, fontWeight: 500 }}>
           {label}
         </span>
         <span className="sw" />

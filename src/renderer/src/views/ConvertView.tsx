@@ -160,15 +160,11 @@ export default function ConvertView(p: Props) {
                 <i className="tone-video" />
                 <i className="tone-pdf" />
               </div>
-              <div className="big">
-                DROP
-                <br />
-                ANYTHING
-              </div>
+              <div className="big">파일을 끌어다 놓으세요</div>
               <div className="sub">
-                문서 · 이미지 · 영상 · PDF를 끌어다 놓으세요.
+                문서 · 이미지 · 영상 · PDF
                 <br />
-                파일을 <b>우클릭</b>하면 변환 그리드가 열립니다.
+                놓은 뒤 우클릭하면 변환 그리드가 열립니다
               </div>
             </div>
             <div className="actions">

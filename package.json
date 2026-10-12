@@ -12,11 +12,13 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test:engines": "electron-vite build && node scripts/engine-test.mjs",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win",
     "dist:mac": "electron-vite build && electron-builder --mac",
-    "release": "electron-vite build && electron-builder --publish always"
+    "selftest": "electron-vite build && electron . --sc-selftest ./_selftest",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
   },
   "dependencies": {
     "@cantoo/fontkit": "^2.0.12",

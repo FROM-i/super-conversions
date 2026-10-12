@@ -29,15 +29,29 @@ npm install
 npm run dev            # 개발 실행
 npm run typecheck
 npm run build          # out/ 빌드
-npx electron . --sc-selftest ./_selftest   # 엔진 전체 자가 테스트 (샘플 생성 → 모든 변환 실행)
+npm run selftest       # 엔진 전체 자가 테스트 (샘플 생성 → 모든 변환 실행)
 ```
 
-## 배포 (GitHub Releases)
+## 업데이트 배포 (GitHub Releases)
 
-1. `package.json`의 `version`을 올립니다.
-2. 태그를 푸시합니다: `git tag v0.1.1 && git push origin v0.1.1`
-3. GitHub Actions가 Windows `.exe`, macOS `.dmg`(Apple Silicon)를 빌드해 Release에 올립니다.
-4. 설치된 앱은 자동 업데이트로 새 버전을 받습니다. (저장소가 Public이어야 합니다.)
+평소에는 `main`에 커밋·푸시만 하면 됩니다. 그때마다 CI가 타입 검사·빌드·엔진 자가 테스트를 돌립니다.
+
+사용자에게 새 버전을 내보낼 때는 한 줄이면 됩니다.
+
+```bash
+npm run release:patch   # 0.1.0 → 0.1.1  (버그 수정)
+npm run release:minor   # 0.1.x → 0.2.0  (기능 추가)
+```
+
+이 명령이 하는 일:
+
+1. `package.json` 버전을 올리고, 지난 릴리스 이후 커밋 제목으로 `CHANGELOG.md`를 채웁니다.
+2. 커밋 → `vX.Y.Z` 태그 → GitHub로 푸시합니다.
+3. GitHub Actions가 Windows `.exe`, macOS `.dmg`·`.zip`을 빌드해 Releases에 올립니다.
+4. 설치된 앱이 실행 시와 4시간마다 새 버전을 확인해 백그라운드로 내려받고, 상단에 **"업데이트 · 재시작"** 버튼을 띄웁니다. 누르지 않아도 다음에 앱을 닫을 때 자동 적용됩니다.
+
+> 저장소는 Public이어야 설치된 앱이 토큰 없이 업데이트를 받을 수 있습니다.
+> macOS 자동 설치는 서명된 빌드에서만 동작합니다(아래 Secrets 등록 전에는 사용자가 Releases에서 직접 내려받아야 합니다).
 
 ### macOS 서명·공증 (선택, 권장)
 

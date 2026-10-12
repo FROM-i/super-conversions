@@ -199,6 +199,15 @@ export interface Job {
   title?: string
 }
 
+export interface UpdateState {
+  status: 'idle' | 'checking' | 'latest' | 'downloading' | 'ready' | 'error'
+  current: string
+  version?: string
+  progress?: number
+  notes?: string
+  message?: string
+}
+
 export interface EngineStatus {
   platform: NodeJS.Platform
   office: { word: boolean; excel: boolean; powerpoint: boolean }

@@ -25,6 +25,13 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Tag must match package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          V=$(node -p "require('./package.json').version")
+          [ "v$V" == "$GITHUB_REF_NAME" ] || { echo "::error::태그($GITHUB_REF_NAME)와 package.json 버전(v$V)이 다릅니다. npm run release:patch 로 배포하세요."; exit 1; }
+
       - run: npm ci
 
       - name: Typecheck

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ActionId } from '@shared/formats'
-import type { EngineStatus, Job, Settings } from '@shared/types'
+import type { EngineStatus, Job, Settings, UpdateState } from '@shared/types'
 import { sc } from './lib/api'
 import { cls } from './lib/util'
 import { IcDown, IcGear, IcGrid, IcJobs, IcPdf } from './lib/icons'
@@ -24,6 +24,7 @@ export default function App() {
   const [links, setLinks] = useState<string[]>([])
   const [pendingAction, setPendingAction] = useState<ActionId | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [upd, setUpd] = useState<UpdateState | null>(null)
   const toastT = useRef<number>(0)
   const dragDepth = useRef(0)
 
@@ -43,6 +44,8 @@ export default function App() {
     sc.appInfo().then((i) => setPlatform(i.platform))
     sc.jobs().then(setJobs)
     refreshEngines()
+    sc.updateState().then(setUpd)
+    const offU = sc.onUpdate(setUpd)
     const off1 = sc.onJob((j) => setJobs((xs) => [j, ...xs.filter((x) => x.id !== j.id)].sort((a, b) => b.createdAt - a.createdAt)))
     const off2 = sc.onMainLoad((fs, action) => {
       setFiles((x) => [...new Set([...x, ...fs])])
@@ -60,6 +63,7 @@ export default function App() {
     return () => {
       off1()
       off2()
+      offU()
       window.removeEventListener('sc-open-editor', openEd)
     }
   }, [refreshEngines])
@@ -145,6 +149,16 @@ export default function App() {
           SUPER CONVERSIONS
         </div>
         <div className="chips nodrag">
+          {upd?.status === 'downloading' && (
+            <span className="chip" title="백그라운드에서 내려받는 중">
+              <span className="dot" />v{upd.version} 내려받는 중 {Math.round((upd.progress ?? 0) * 100)}%
+            </span>
+          )}
+          {upd?.status === 'ready' && (
+            <button className="chip update" onClick={() => sc.installUpdate()} title="지금 재시작해서 적용합니다. 나중에 앱을 닫으면 자동 적용됩니다.">
+              <span className="dot" />v{upd.version} 업데이트 · 재시작
+            </button>
+          )}
           {engines ? (
             <>
               <span className={cls('chip', officeOn ? 'on' : engines.libreoffice ? 'warn' : '')} title={officeOn ? 'MS Office로 원본 서식 그대로 변환' : engines.libreoffice ? 'LibreOffice로 변환 (서식 일부 차이)' : '문서 변환 엔진 없음'}>

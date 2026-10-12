@@ -1,0 +1,29 @@
+name: CI
+
+# Every push / PR to main: typecheck + build + headless engine self-test on Linux.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx electron-vite build
+      - name: Install LibreOffice + Korean fonts (for document self-test)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer libreoffice-calc libreoffice-impress fonts-noto-cjk xvfb
+      - name: Engine self-test
+        run: xvfb-run -a npx electron . --no-sandbox --sc-selftest ./_selftest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest-report
+          path: _selftest/selftest-report.json

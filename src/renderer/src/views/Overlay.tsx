@@ -51,7 +51,7 @@ export default function Overlay() {
         <rect x="0" y="0" width="100" height="100" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - total * 100} vectorEffect="non-scaling-stroke" />
       </svg>
       <span className="hint">{job.action !== 'download' ? ACTION_BY_ID[job.action].label : ''}</span>
-      <span className="lab" style={{ fontSize: 26 }}>
+      <span className="lab">
         {job.status === 'running' || job.status === 'queued' ? `${Math.round(total * 100)}%` : failed.length ? 'CHECK' : 'DONE'}
       </span>
       <span className="count" title={failed[0]?.message}>
@@ -70,7 +70,7 @@ export default function Overlay() {
 
   return (
     <div className="overlay-root">
-      <GridMenu files={files} cell={128} onPick={pick} onClose={() => sc.overlayClose()} center={center} locked={!!job && job.status === 'running'} />
+      <GridMenu files={files} cell={112} onPick={pick} onClose={() => sc.overlayClose()} center={center} locked={!!job && job.status === 'running'} />
       {failed.length > 0 && (
         <button className="toast" style={{ bottom: 6, fontSize: 11 }} onClick={() => sc.overlayOpenMain(files)}>
           {failed[0].message?.slice(0, 80)} — 자세히

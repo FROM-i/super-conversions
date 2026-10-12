@@ -94,7 +94,7 @@ export default function SettingsView({ settings, setSettings, engines, refreshEn
                 </div>
               ))}
               <button className="sig" style={{ placeItems: 'center', display: 'grid', minHeight: 150, border: '1px dashed var(--line-strong)' }} onClick={() => setModal(true)}>
-                <span className="row" style={{ fontWeight: 700 }}>
+                <span className="row" style={{ fontWeight: 500 }}>
                   <IcPlus /> 새 서명·직인
                 </span>
               </button>
@@ -216,7 +216,13 @@ export default function SettingsView({ settings, setSettings, engines, refreshEn
               <Toggle on={settings.autoUpdateApp} onChange={(v) => save({ autoUpdateApp: v })} label="앱 자동 업데이트" help="GitHub Releases에서 새 버전을 확인해 백그라운드로 내려받고, 다음 실행 때 적용합니다." />
               <Field label="업데이트 확인">
                 <div className="row">
-                  <button className="btn" onClick={async () => toast((await sc.checkUpdate()).message)}>
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      const s = await sc.checkUpdate()
+                      toast(s.status === 'error' ? s.message ?? '확인 실패' : s.status === 'downloading' ? `새 버전 ${s.version}을 내려받는 중입니다.` : s.status === 'ready' ? `새 버전 ${s.version}이 준비되었습니다.` : '최신 버전입니다.')
+                    }}
+                  >
                     지금 확인
                   </button>
                   <span className="muted mono">현재 v{info?.version}</span>

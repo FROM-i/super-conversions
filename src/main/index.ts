@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell, screen, nativeImage, native
 import { join } from 'path'
 import { promises as fs, statSync } from 'fs'
 import sharp from 'sharp'
-import { autoUpdater } from 'electron-updater'
+import { initUpdater, setUpdaterEnabled } from './updater'
 import { categoryOf, type ActionId } from '@shared/formats'
 import type { ActionOptions, EditDocument, EngineStatus, Settings } from '@shared/types'
 import { getSettings, saveSettings, addSignature, removeSignature, getSignaturePng } from './settings'
@@ -189,7 +189,10 @@ async function thumbnail(path: string): Promise<string | null> {
 // ---------------------------------------------------------------- IPC
 function registerIpc() {
   ipcMain.handle('settings:get', () => getSettings())
-  ipcMain.handle('settings:save', (_e, patch: Partial<Settings>) => saveSettings(patch))
+  ipcMain.handle('settings:save', (_e, patch: Partial<Settings>) => {
+    if (patch.autoUpdateApp !== undefined) setUpdaterEnabled(patch.autoUpdateApp)
+    return saveSettings(patch)
+  })
   ipcMain.handle('engines:status', () => engineStatus())
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }))
 
@@ -259,15 +262,6 @@ function registerIpc() {
     if (main?.webContents.isLoading()) main.webContents.once('did-finish-load', send)
     else send()
   })
-  ipcMain.handle('app:checkUpdate', async () => {
-    if (!app.isPackaged) return { ok: false, message: '개발 모드에서는 업데이트를 확인하지 않습니다.' }
-    try {
-      const r = await autoUpdater.checkForUpdates()
-      return { ok: true, message: r?.updateInfo?.version && r.updateInfo.version !== app.getVersion() ? `새 버전 ${r.updateInfo.version}을 내려받는 중입니다.` : '최신 버전입니다.' }
-    } catch (e) {
-      return { ok: false, message: (e as Error).message }
-    }
-  })
 }
 
 // ---------------------------------------------------------------- lifecycle
@@ -275,6 +269,7 @@ app.whenReady().then(async () => {
   if (isMac) Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]))
   else Menu.setApplicationMenu(null)
   registerIpc()
+  initUpdater(getSettings().autoUpdateApp)
   const st = process.argv.indexOf('--sc-selftest')
   if (st >= 0) {
     const { runSelfTest } = await import('./selftest')
@@ -297,10 +292,6 @@ app.whenReady().then(async () => {
   }
   if (process.env.SC_SHOT && !app.isPackaged) devShots(process.env.SC_SHOT, process.env.SC_DEMO_FILES?.split('|') ?? [])
   if (getSettings().autoUpdateDownloader) updateYtdlp().catch(() => undefined)
-  if (app.isPackaged && getSettings().autoUpdateApp) {
-    autoUpdater.autoDownload = true
-    autoUpdater.checkForUpdatesAndNotify().catch(() => undefined)
-  }
   app.on('activate', () => {
     if (!main) createMain()
   })
@@ -322,7 +313,7 @@ async function devShots(dir: string, files: string[]) {
     await fs.writeFile(join(dir, name + '.png'), img.toPNG())
   }
   const js = (code: string) => main!.webContents.executeJavaScript(code)
-  await wait(2500)
+  await wait(5000)
   await shot('01-empty')
   main!.webContents.send('main:load', files)
   await wait(2500)
