@@ -24,7 +24,7 @@ const next = kind === 'major' ? `${ma + 1}.0.0` : kind === 'minor' ? `${ma}.${mi
 let last = ''
 try { last = sh('git log -1 --format=%H --grep="^chore(release):"') } catch { /* first release */ }
 const log = sh(`git log ${last ? last + '..HEAD' : ''} --pretty=format:"- %s" --no-merges`)
-  .split('\n').filter((l) => l && !/^- (chore\(release\)|Merge)/.test(l)).join('\n') || '- 유지보수'
+  .split('\n').filter((l) => l && !/^- (chore|ci|docs|test|build)(\(.*?\))?:|^- Merge/.test(l)).join('\n') || '- 유지보수'
 
 const date = new Date().toISOString().slice(0, 10)
 const prev = existsSync('CHANGELOG.md') ? readFileSync('CHANGELOG.md', 'utf8').replace(/^# 변경 기록\n+/, '') : ''
