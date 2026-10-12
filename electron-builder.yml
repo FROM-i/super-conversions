@@ -1,0 +1,77 @@
+appId: kr.thefrom.superconversions
+productName: Super Conversions
+copyright: Copyright © THE FROM
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - "!**/*.map"
+  - "!node_modules/pdfjs-dist/**"
+  - "!node_modules/pretendard/**"
+  - "!node_modules/@fontsource/**"
+  - "!node_modules/ag-psd/dist-es/**"
+  - "!node_modules/ag-psd/src/**"
+  - "!**/*.d.ts"
+  - "!**/{README,CHANGELOG}.md"
+asarUnpack:
+  - node_modules/ffmpeg-static/**
+  - node_modules/sharp/**
+  - node_modules/@img/**
+extraResources:
+  - from: resources
+    to: resources
+    filter: ["**/*"]
+  - from: src/main/scripts
+    to: scripts
+    filter: ["**/*"]
+
+fileAssociations:
+  - ext: [pdf, ppt, pptx, doc, docx, xls, xlsx, csv, hwp, hwpx, psd, webp, heic, heif, avif, png, jpg, jpeg, tif, tiff, mov, mp4, mkv, avi, webm]
+    name: Super Conversions Source
+    role: Viewer
+    rank: Alternate
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: SuperConversions-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Super Conversions
+  deleteAppDataOnUninstall: false
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  icon: build/icon.png
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  artifactName: SuperConversions-${version}-${arch}.${ext}
+  extendInfo:
+    NSAppleEventsUsageDescription: "Microsoft Office·Keynote 등 설치된 앱으로 원본 서식 그대로 변환하기 위해 필요합니다."
+    NSDesktopFolderUsageDescription: "변환할 파일을 읽고 결과를 저장하기 위해 필요합니다."
+    NSDocumentsFolderUsageDescription: "변환할 파일을 읽고 결과를 저장하기 위해 필요합니다."
+    NSDownloadsFolderUsageDescription: "영상 다운로드와 변환 결과 저장에 필요합니다."
+
+linux:
+  target: [AppImage]
+  icon: build/icon.png
+
+publish:
+  provider: github
+  owner: FROM-i
+  repo: super-conversions
+  releaseType: release

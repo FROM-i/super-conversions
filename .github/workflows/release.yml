@@ -1,0 +1,77 @@
+name: Build & Release
+
+# Push a tag like v0.1.0 → builds Windows (.exe) + macOS (.dmg, Apple Silicon) and publishes a GitHub Release.
+# Manual runs (workflow_dispatch) build installers as downloadable artifacts without publishing.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build app
+        run: npx electron-vite build
+
+      # ---- macOS signing/notarization: active only when the secrets exist ----
+      - name: macOS signing env
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+        run: |
+          if [ -z "$CSC_LINK" ]; then
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> $GITHUB_ENV
+            echo "SC_NOTARIZE=false" >> $GITHUB_ENV
+            echo "::warning::Mac 서명 인증서가 없어 서명 없이 빌드합니다 (첫 실행 시 우클릭 › 열기 필요)."
+          else
+            echo "SC_NOTARIZE=true" >> $GITHUB_ENV
+          fi
+
+      - name: Package (${{ runner.os }})
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          PUBLISH=never
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then PUBLISH=always; fi
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            npx electron-builder --mac --publish $PUBLISH -c.mac.notarize=${SC_NOTARIZE:-false}
+          else
+            npx electron-builder --win --publish $PUBLISH
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ runner.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.yml
+          if-no-files-found: ignore
