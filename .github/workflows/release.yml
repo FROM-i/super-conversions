@@ -93,6 +93,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -o pipefail
+          # empty secrets arrive as "" — electron-builder would treat CSC_LINK="" as a path
+          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          if [ -z "$APPLE_ID" ]; then unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; fi
           if [ "$RUNNER_OS" == "macOS" ]; then
             CMD="npx electron-builder --mac --publish never -c.mac.notarize=${SC_NOTARIZE:-false}"
           else
