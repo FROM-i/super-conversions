@@ -356,12 +356,13 @@ npm run release:major   # 0.x.y → 1.0.0  큰 변경
 
 1. `package.json` 버전을 올립니다.
 2. 지난 릴리스 이후의 커밋 제목으로 `CHANGELOG.md`를 채웁니다.
-3. 커밋 → `vX.Y.Z` 태그 → GitHub로 올립니다.
-4. GitHub Actions가 Windows `.exe`와 macOS `.dmg`·`.zip`을 빌드해 [Releases](https://github.com/FROM-i/super-conversions/releases)에 공개합니다. 약 15–20분 걸립니다.
+3. 커밋해서 `main`에 올립니다.
+4. GitHub Actions가 버전이 바뀐 것을 보고 Windows `.exe`와 macOS `.dmg`·`.zip`을 빌드해 [Releases](https://github.com/FROM-i/super-conversions/releases)에 `vX.Y.Z`로 공개합니다. 약 15–20분 걸립니다.
 5. 사용자 PC의 앱이 자동으로 새 버전을 받습니다.
 
 - **커밋 메시지가 곧 변경 기록입니다.** 사용자가 읽을 수 있는 문장으로 써 주세요. 예: `PDF 병합 시 페이지 순서 오류 수정`.
-- **태그 번호와 앱 버전이 다르면 배포가 자동으로 중단됩니다.** 수동으로 태그를 만들지 말고 위 명령을 쓰세요.
+- **같은 버전은 두 번 배포되지 않습니다.** 이미 Releases에 있는 버전이면 빌드를 건너뜁니다.
+- `package.json`의 `version`을 직접 고쳐서 올려도 똑같이 배포됩니다. `v*` 태그를 올리는 방식도 지원합니다.
 
 ---
 
@@ -388,7 +389,7 @@ npm run dist:mac       # 로컬에서 macOS 설치파일 빌드 (Mac에서)
 | 워크플로 | 언제 | 하는 일 |
 |---|---|---|
 | `CI` | `main`에 올릴 때, PR | 타입 검사 → 빌드 → 엔진 자가 테스트 (Linux + LibreOffice) |
-| `Build & Release` | `v*` 태그를 올릴 때 | Windows·macOS 설치파일 빌드 → Releases 공개 |
+| `Build & Release` | `main`에서 `package.json` 버전이 바뀔 때 (또는 `v*` 태그, 수동 실행) | 새 버전이면 Windows·macOS 설치파일 빌드 → Releases 공개 |
 
 ### macOS 서명·공증 (권장)
 
