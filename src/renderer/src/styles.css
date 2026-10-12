@@ -613,24 +613,70 @@ textarea {
 }
 .tile .check {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--ink);
-  background: var(--surface);
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
   opacity: 0;
   transition: opacity 0.12s;
+  z-index: 3;
+}
+/* the visible box is smaller than the hit area */
+.tile .check::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+}
+.tile .check svg {
+  position: relative;
 }
 .tile:hover .check,
-.tile.sel .check {
+.tile.sel .check,
+.tiles.checking .tile .check {
   opacity: 1;
 }
+.tile.sel .check::before {
+  background: var(--ink);
+}
 .tile.sel .check {
+  color: var(--inverse);
+}
+.tiles.checking .tile {
+  cursor: pointer;
+}
+.select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+}
+.select-all .lbl {
+  font-size: var(--fs-s);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cbox {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.cbox.on {
   background: var(--ink);
   color: var(--inverse);
+}
+.cbox .dash {
+  width: 8px;
+  height: 1.5px;
+  background: currentColor;
+  display: block;
 }
 .tile .x {
   position: absolute;

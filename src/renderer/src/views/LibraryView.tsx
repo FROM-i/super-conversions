@@ -6,6 +6,7 @@ import { cls, fmtBytes } from '../lib/util'
 import GridMenu, { type GridPick } from '../components/GridMenu'
 import OptionsPanel from '../components/OptionsPanel'
 import RenameModal from '../components/RenameModal'
+import SelectAll from '../components/SelectAll'
 import { IcCheck, IcFolder } from '../lib/icons'
 
 interface Props {
@@ -42,6 +43,19 @@ export default function LibraryView({ settings, setSettings, engines, toast, onO
   const [preview, setPreview] = useState<string | null>(null)
   const [big, setBig] = useState<string | null>(null)
   const loadedThumbs = useRef(new Set<string>())
+  const [checkMode, setCheckMode] = useState(false)
+  useEffect(() => {
+    if (sel.size === 0) setCheckMode(false)
+  }, [sel])
+  const toggle = (p: string) => {
+    setSel((s) => {
+      const n = new Set(s)
+      n.has(p) ? n.delete(p) : n.add(p)
+      return n
+    })
+    setAnchor(p)
+    setCheckMode(true)
+  }
 
   const load = useCallback(async () => {
     const r = await sc.libraryList()
@@ -92,13 +106,8 @@ export default function LibraryView({ settings, setSettings, engines, toast, onO
       const b = order.indexOf(p)
       const [lo, hi] = a < b ? [a, b] : [b, a]
       setSel(new Set(order.slice(lo, hi + 1)))
-    } else if (e.metaKey || e.ctrlKey) {
-      setSel((s) => {
-        const n = new Set(s)
-        n.has(p) ? n.delete(p) : n.add(p)
-        return n
-      })
-      setAnchor(p)
+    } else if (e.metaKey || e.ctrlKey || checkMode) {
+      toggle(p)
     } else {
       setSel(new Set([p]))
       setAnchor(p)
@@ -188,7 +197,7 @@ export default function LibraryView({ settings, setSettings, engines, toast, onO
         <div className="toolbar">
           <span className="title">라이브러리</span>
           <span className="muted">{items.length}개</span>
-          {selected.length > 0 && <span className="chip">{selected.length}개 선택</span>}
+          <SelectAll total={shown.length} selected={selected.length} onAll={() => (setSel(new Set(order)), setCheckMode(true))} onNone={() => setSel(new Set())} />
           <span className="grow" />
           <input className="inp" style={{ width: 200, height: 30 }} placeholder="이름으로 찾기" value={q} onChange={(e) => setQ(e.target.value)} />
           <button className="btn ghost" disabled={!selected.length} onClick={() => setRenaming(selected)}>
@@ -245,11 +254,30 @@ export default function LibraryView({ settings, setSettings, engines, toast, onO
                 <div className="lib-day">
                   <span>{g.label}</span>
                   <span className="muted">{g.items.length}</span>
-                  <button className="btn ghost" style={{ height: 22, padding: '0 6px', fontSize: 11 }} onClick={() => setSel(new Set(g.items.map((i) => i.path)))}>
-                    모두 선택
-                  </button>
+                  {(() => {
+                    const all = g.items.every((i) => sel.has(i.path))
+                    const some = !all && g.items.some((i) => sel.has(i.path))
+                    const flip = () => {
+                      setSel((s) => {
+                        const n = new Set(s)
+                        g.items.forEach((i) => (all ? n.delete(i.path) : n.add(i.path)))
+                        return n
+                      })
+                      setCheckMode(true)
+                    }
+                    return (
+                      <span className="select-all" style={{ marginLeft: 4 }}>
+                        <button className={cls('cbox', (all || some) && 'on')} onClick={flip} aria-label={`${g.label} 전체 선택`}>
+                          {all ? <IcCheck /> : some ? <i className="dash" /> : null}
+                        </button>
+                        <span className="lbl muted" onClick={flip}>
+                          {all ? '이 날짜 해제' : '이 날짜 모두 선택'}
+                        </span>
+                      </span>
+                    )
+                  })()}
                 </div>
-                <div className="tiles lib-tiles">
+                <div className={cls('tiles lib-tiles', checkMode && 'checking')}>
                   {g.items.map((it) => (
                     <div
                       key={it.path}
@@ -271,7 +299,17 @@ export default function LibraryView({ settings, setSettings, engines, toast, onO
                           {new Date(it.ctime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} · {fmtBytes(it.size)}
                         </span>
                       </div>
-                      <span className="check">{sel.has(it.path) && <IcCheck />}</span>
+                      <button
+                        className="check"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggle(it.path)
+                        }}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                        aria-label={sel.has(it.path) ? '선택 해제' : '선택'}
+                      >
+                        {sel.has(it.path) && <IcCheck />}
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -281,7 +319,7 @@ export default function LibraryView({ settings, setSettings, engines, toast, onO
         </div>
         <div className="statusbar">
           <span>
-            더블클릭 크게 보기 · <span className="kbd">F2</span> 이름 변경 · 우클릭 변환 · 다른 앱으로 끌어다 놓기 · <span className="kbd">Ctrl/⌘ C</span> 복사
+            체크박스로 여러 개 선택 · 더블클릭 크게 보기 · <span className="kbd">F2</span> 이름 변경 · 우클릭 변환 · 다른 앱으로 끌어다 놓기 · <span className="kbd">Ctrl/⌘ C</span> 복사
           </span>
           <span className="grow" />
           <span className="mono" title={dir} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }}>

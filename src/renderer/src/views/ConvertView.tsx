@@ -6,6 +6,7 @@ import { baseName, cls, fmtBytes, toneOfPath } from '../lib/util'
 import GridMenu, { type GridPick } from '../components/GridMenu'
 import OptionsPanel from '../components/OptionsPanel'
 import RenameModal from '../components/RenameModal'
+import SelectAll from '../components/SelectAll'
 import { IcCheck, IcFile, IcFolder, IcLink, IcX } from '../lib/icons'
 
 interface Props {
@@ -32,6 +33,20 @@ export default function ConvertView(p: Props) {
   const [sizes, setSizes] = useState<Record<string, number>>({})
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [renaming, setRenaming] = useState<string[] | null>(null)
+  // checkbox mode: once a checkbox / select-all is used, plain clicks toggle instead of replacing
+  const [checkMode, setCheckMode] = useState(false)
+  useEffect(() => {
+    if (sel.size === 0) setCheckMode(false)
+  }, [sel])
+  const toggle = (f: string) => {
+    setSel((s) => {
+      const n = new Set(s)
+      n.has(f) ? n.delete(f) : n.add(f)
+      return n
+    })
+    setAnchor(f)
+    setCheckMode(true)
+  }
   const tilesRef = useRef<HTMLDivElement>(null)
 
   // latest result per input path
@@ -104,11 +119,8 @@ export default function ConvertView(p: Props) {
       const b = files.indexOf(f)
       const [lo, hi] = a < b ? [a, b] : [b, a]
       setSel(new Set(files.slice(lo, hi + 1)))
-    } else if (mod) {
-      const n = new Set(sel)
-      n.has(f) ? n.delete(f) : n.add(f)
-      setSel(n)
-      setAnchor(f)
+    } else if (mod || checkMode) {
+      toggle(f)
     } else {
       setSel(sel.size === 1 && sel.has(f) ? new Set() : new Set([f]))
       setAnchor(f)
@@ -232,7 +244,7 @@ export default function ConvertView(p: Props) {
       <div className="board-main">
         <div className="toolbar">
           <span className="title">{files.length}개 파일</span>
-          {selected.length > 0 && <span className="chip">{selected.length}개 선택</span>}
+          <SelectAll total={files.length} selected={selected.length} onAll={() => (setSel(new Set(files)), setCheckMode(true))} onNone={() => setSel(new Set())} />
           <span className="grow" />
           <button className="btn ghost" onClick={() => setRenaming(selected.length ? selected : files)} title="선택한 파일(없으면 전체)의 이름을 바꿉니다">
             이름 변경 <span className="kbd">F2</span>
@@ -257,7 +269,7 @@ export default function ConvertView(p: Props) {
           </button>
         </div>
         <div
-          className="tiles"
+          className={cls('tiles', checkMode && 'checking')}
           ref={tilesRef}
           onMouseDown={(e) => e.target === e.currentTarget && setSel(new Set())}
           onContextMenu={(e) => {
@@ -308,7 +320,17 @@ export default function ConvertView(p: Props) {
                   <span className="size mono">{fmtBytes(sizes[f])}</span>
                 </div>
                 <span className="ext">{ext.toUpperCase()}</span>
-                <span className="check">{sel.has(f) && <IcCheck />}</span>
+                <button
+                  className="check"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggle(f)
+                  }}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  aria-label={sel.has(f) ? '선택 해제' : '선택'}
+                >
+                  {sel.has(f) && <IcCheck />}
+                </button>
                 <button
                   className="x"
                   onClick={(e) => {
@@ -335,7 +357,7 @@ export default function ConvertView(p: Props) {
         </div>
         <div className="statusbar">
           <span>
-            파일 <b>우클릭</b> 또는 <span className="kbd">Space</span> → 변환 그리드 · 숫자패드 <span className="kbd">1</span>–<span className="kbd">9</span> 로 바로 선택 · <span className="kbd">F2</span> 이름 변경
+            체크박스로 여러 개 선택 · 파일 <b>우클릭</b> 또는 <span className="kbd">Space</span> → 변환 그리드 · 숫자패드 <span className="kbd">1</span>–<span className="kbd">9</span> 로 바로 선택 · <span className="kbd">F2</span> 이름 변경
           </span>
           <span className="grow" />
           <span>{cats.size > 1 ? '여러 종류 선택됨 → 그리드에서 종류를 먼저 고릅니다' : ''}</span>
