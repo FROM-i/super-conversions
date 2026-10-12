@@ -100,7 +100,9 @@ jobs:
           fi
           if ! $CMD 2>&1 | tee build.log; then
             # surface the failure as annotations (readable without log access)
-            tail -n 25 build.log | sed 's/%/%25/g' | while IFS= read -r line; do echo "::error::$line"; done
+            # GitHub keeps max 10 annotations per step → send one multi-line annotation
+            MSG=$(tail -n 30 build.log | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=electron-builder failed::$MSG"
             exit 1
           fi
           ls -la dist
