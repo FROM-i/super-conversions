@@ -87,10 +87,16 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           PUBLISH=always
+          set -o pipefail
           if [ "$RUNNER_OS" == "macOS" ]; then
-            npx electron-builder --mac --publish $PUBLISH -c.mac.notarize=${SC_NOTARIZE:-false}
+            CMD="npx electron-builder --mac --publish $PUBLISH -c.mac.notarize=${SC_NOTARIZE:-false}"
           else
-            npx electron-builder --win --publish $PUBLISH
+            CMD="npx electron-builder --win --publish $PUBLISH"
+          fi
+          if ! $CMD 2>&1 | tee build.log; then
+            # surface the failure as annotations (readable without log access)
+            tail -n 25 build.log | sed 's/%/%25/g' | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
           fi
 
       - uses: actions/upload-artifact@v4
