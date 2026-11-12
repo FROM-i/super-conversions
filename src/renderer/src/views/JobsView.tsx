@@ -40,11 +40,11 @@ export default function JobsView({ jobs }: { jobs: Job[] }) {
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <div className="grow">
           <h1>작업</h1>
-          <p className="lead">변환 결과는 원본 폴더의 SUPER CONVERSIONS/V번호 폴더에 저장됩니다. 실행할 때마다 V1, V2, V3…가 새로 만들어집니다.</p>
+          <p className="lead">변환 결과는 원본 폴더의 SUPER CONVERSIONS/V번호 폴더에 저장됩니다. 실행할 때마다 V1, V2, V3…가 새로 만들어집니다. 내역을 지워도 만들어진 파일은 그대로 남습니다.</p>
         </div>
-        {jobs.some((j) => j.status !== 'running') && (
-          <button className="btn ghost" onClick={() => sc.clearJobs()}>
-            완료 항목 지우기
+        {jobs.some((j) => j.status !== 'running' && j.status !== 'queued') && (
+          <button className="btn" onClick={() => sc.clearJobs()} title="진행 중인 작업은 남기고 끝난 작업 내역만 지웁니다. 만들어진 파일은 지워지지 않습니다.">
+            끝난 작업 모두 지우기
           </button>
         )}
       </div>
@@ -68,6 +68,11 @@ export default function JobsView({ jobs }: { jobs: Job[] }) {
               {j.status === 'running' && (
                 <button className="btn ghost" onClick={() => sc.cancel(j.id)}>
                   <IcX /> 취소
+                </button>
+              )}
+              {j.status !== 'running' && j.status !== 'queued' && (
+                <button className="btn ghost" onClick={() => sc.removeJob(j.id)} title="이 작업 내역만 목록에서 지웁니다 (파일은 그대로)" aria-label="내역 지우기">
+                  <IcX />
                 </button>
               )}
               {j.outDirs.map((d) => (

@@ -1991,3 +1991,58 @@ textarea.inp {
   color: inherit;
   opacity: 0.7;
 }
+
+.vedit-body {
+  display: grid;
+  grid-template-columns: 188px 1fr;
+  min-height: 0;
+}
+.vedit-bin {
+  border-right: 1px solid var(--line);
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+.vshelf.compact {
+  width: auto;
+  grid-template-columns: 1fr;
+  overflow-y: auto;
+  align-content: start;
+  min-height: 0;
+}
+.vcard .th {
+  position: relative;
+}
+.vcard-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.vcard:hover .vcard-x {
+  opacity: 1;
+}
+.vcard-x:hover {
+  background: var(--ink);
+  color: var(--inverse);
+}
+.vcard-n {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  background: var(--tone);
+  color: var(--on-tone);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 4px;
+}

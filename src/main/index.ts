@@ -6,7 +6,7 @@ import { initUpdater, setUpdaterEnabled } from './updater'
 import { categoryOf, type ActionId } from '@shared/formats'
 import type { ActionOptions, EditDocument, EngineStatus, Settings } from '@shared/types'
 import { getSettings, saveSettings, addSignature, removeSignature, getSignaturePng } from './settings'
-import { startJob, startEditJob, startDownloadJob, cancelJob, listJobs, clearFinished } from './jobs'
+import { startJob, startEditJob, startDownloadJob, cancelJob, listJobs, clearFinished, removeJob } from './jobs'
 import { detectOffice, officeWorker } from './engines/office'
 import { probeUrl, extractUrls } from './engines/download'
 import { pageInfo } from './engines/pdf'
@@ -321,6 +321,7 @@ function registerIpc() {
   ipcMain.handle('job:cancel', (_e, id: string) => cancelJob(id))
   ipcMain.handle('job:list', () => listJobs())
   ipcMain.handle('job:clear', () => clearFinished())
+  ipcMain.handle('job:remove', (_e, id: string) => removeJob(id))
   ipcMain.handle('url:probe', (_e, url: string) => probeUrl(url))
   ipcMain.handle('url:extract', (_e, text: string) => extractUrls(text))
   ipcMain.handle('pdf:pageInfo', (_e, path: string) => pageInfo(path))
@@ -500,7 +501,11 @@ async function devShots(dir: string, files: string[]) {
     await js(`[...document.querySelectorAll('.toolbar .btn')].find((b) => b.textContent.includes('내보내기')).click()`)
     await wait(700)
     await shot('14-video-export')
+    await js(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   }
+  await js(`document.querySelectorAll('.rail button')[5].click()`)
+  await wait(800)
+  await shot('15-jobs')
   app.exit(0)
 }
 

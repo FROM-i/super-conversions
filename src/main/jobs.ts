@@ -49,8 +49,21 @@ export const listJobs = () => [...jobs.values()].sort((a, b) => b.createdAt - a.
 export function cancelJob(id: string) {
   aborts.get(id)?.abort()
 }
+/** Tell every window the full list changed (removals don't come through job:update). */
+function broadcastList() {
+  const list = listJobs()
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('jobs:list', list)
+  return list
+}
 export function clearFinished() {
   for (const [id, j] of jobs) if (j.status !== 'running' && j.status !== 'queued') jobs.delete(id)
+  return broadcastList()
+}
+export function removeJob(id: string) {
+  const j = jobs.get(id)
+  if (j && (j.status === 'running' || j.status === 'queued')) return listJobs() // cancel first
+  jobs.delete(id)
+  return broadcastList()
 }
 
 function newJob(action: Job['action'], inputs: string[], options: ActionOptions, title?: string): Job {

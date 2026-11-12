@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ExportLevel, Job, VideoClipInfo } from '@shared/types'
 import { sc } from '../lib/api'
 import { baseName, cls, fmtBytes } from '../lib/util'
-import { IcPlus, IcRedo, IcUndo } from '../lib/icons'
+import { IcPlus, IcRedo, IcUndo, IcX } from '../lib/icons'
 
 // ---------------------------------------------------------------- model
 interface Clip {
@@ -154,6 +154,25 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
   }, [inbox]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => sc.onProxyProgress((p, x) => setProxyPct((m) => ({ ...m, [p]: x }))), [])
+
+  /** Remove an imported video from the tool only — the file on disk is untouched. */
+  const removeClip = (path: string) => {
+    const used = segsRef.current.filter((x) => x.path === path).length
+    if (used && !window.confirm(`타임라인에서 이 영상으로 만든 조각 ${used}개도 함께 빠집니다. 계속할까요?\n(컴퓨터의 원본 파일은 지워지지 않습니다)`)) return
+    if (used) {
+      video.current?.pause()
+      setPlaying(false)
+      loadedPath.current = null
+      commit((ss) => ss.filter((x) => x.path !== path))
+      setSel(new Set())
+    }
+    setClips((c) => {
+      const n = { ...c }
+      delete n[path]
+      return n
+    })
+    toast(`${baseName(path)}을(를) 목록에서 뺐습니다 · 원본 파일은 그대로입니다`)
+  }
 
   // ---------------------------------------------------------------- playback
   const loadSeg = useCallback(async (i: number, src: number, autoplay: boolean) => {
@@ -424,7 +443,7 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
               <button onClick={async () => addPaths(await sc.pickVideos(), 'replace')}>영상 불러오기</button>
             </div>
           </div>
-          {shelf.length > 0 && <Shelf shelf={shelf} onEdit={(p) => addPaths([p], 'replace')} onAppend={(p) => addPaths([p], 'append')} />}
+          {shelf.length > 0 && <Shelf shelf={shelf} onEdit={(p) => addPaths([p], 'replace')} onAppend={(p) => addPaths([p], 'append')} onRemove={removeClip} />}
         </div>
       </div>
     )
@@ -506,6 +525,14 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
         </div>
       )}
 
+      <div className="vedit-body">
+      <aside className="vedit-bin">
+        <div className="cap">불러온 영상 {shelf.length}</div>
+        <Shelf compact shelf={shelf} onEdit={(p) => addPaths([p], 'append')} onAppend={(p) => addPaths([p], 'append')} onRemove={removeClip} usage={(p) => segs.filter((x) => x.path === p).length} />
+        <button className="btn ghost" style={{ justifyContent: 'center' }} onClick={async () => addPaths(await sc.pickVideos(), 'shelf')}>
+          <IcPlus /> 영상 불러오기
+        </button>
+      </aside>
       <div className="vedit-main">
         <div className="vedit-stage">
           <video ref={video} className="vedit-video" playsInline onError={onVideoError} onClick={togglePlay} />
@@ -639,38 +666,61 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
         </div>
       </div>
 
+      </div>
       {exporting && <ExportModal total={total} first={segs[0].path} firstClip={clips[segs[0].path]} onClose={() => setExporting(false)} onRun={runExport} />}
     </div>
   )
 }
 
 // ---------------------------------------------------------------- pieces
-function Shelf({ shelf, onEdit, onAppend }: { shelf: Clip[]; onEdit: (p: string) => void; onAppend: (p: string) => void }) {
+function Shelf({ shelf, onEdit, onAppend, onRemove, compact, usage }: { shelf: Clip[]; onEdit: (p: string) => void; onAppend: (p: string) => void; onRemove: (p: string) => void; compact?: boolean; usage?: (p: string) => number }) {
+  const cards = (
+    <div className={cls('vshelf', compact && 'compact')}>
+      {shelf.map((c) => {
+        const n = usage?.(c.path) ?? 0
+        return (
+          <div key={c.path} className="vcard" onClick={() => onEdit(c.path)} title={compact ? '눌러서 타임라인 끝에 붙이기' : '눌러서 편집'}>
+            <div className="th" style={c.sprite ? { backgroundImage: `url(${c.sprite.url})`, backgroundSize: `${c.sprite.frames * 100}% 100%` } : undefined}>
+              <button
+                className="vcard-x"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRemove(c.path)
+                }}
+                title="툴에서만 빼기 (원본 파일은 지워지지 않습니다)"
+                aria-label="목록에서 빼기"
+              >
+                <IcX />
+              </button>
+              {n > 0 && <span className="vcard-n">타임라인 {n}</span>}
+            </div>
+            <div className="nm">{c.name}</div>
+            <div className="muted mono" style={{ fontSize: 10.5 }}>
+              {fmt(c.info.duration)}
+            </div>
+            {!compact && (
+              <button
+                className="btn ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAppend(c.path)
+                }}
+              >
+                + 붙이기
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+  if (compact) return cards
   return (
     <div style={{ marginTop: 28, textAlign: 'left' }}>
       <div className="cap" style={{ marginBottom: 8 }}>
         불러온 영상
       </div>
-      <div className="vshelf">
-        {shelf.map((c) => (
-          <div key={c.path} className="vcard" onClick={() => onEdit(c.path)} title="눌러서 편집">
-            <div className="th" style={c.sprite ? { backgroundImage: `url(${c.sprite.url})`, backgroundSize: `${c.sprite.frames * 100}% 100%` } : undefined} />
-            <div className="nm">{c.name}</div>
-            <div className="muted mono" style={{ fontSize: 10.5 }}>
-              {fmt(c.info.duration)}
-            </div>
-            <button
-              className="btn ghost"
-              onClick={(e) => {
-                e.stopPropagation()
-                onAppend(c.path)
-              }}
-            >
-              + 붙이기
-            </button>
-          </div>
-        ))}
-      </div>
+      {cards}
     </div>
   )
 }

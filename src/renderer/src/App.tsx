@@ -54,6 +54,7 @@ export default function App() {
     sc.updateState().then(setUpd)
     const offU = sc.onUpdate(setUpd)
     const offV = sc.onView((v) => setView(v as View))
+    const offL = sc.onJobList(setJobs)
     const off1 = sc.onJob((j) => setJobs((xs) => [j, ...xs.filter((x) => x.id !== j.id)].sort((a, b) => b.createdAt - a.createdAt)))
     const off2 = sc.onMainLoad((fs, action) => {
       setFiles((x) => [...new Set([...x, ...fs])])
@@ -75,6 +76,7 @@ export default function App() {
     window.addEventListener('sc-edit-videos', editVid)
     return () => {
       off1()
+      offL()
       off2()
       offU()
       offV()

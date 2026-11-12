@@ -5,7 +5,7 @@ import { join } from 'path'
 import sharp from 'sharp'
 import { PDFDocument, StandardFonts, rgb, degrees } from '@cantoo/pdf-lib'
 import { ffmpegPath, run, findSoffice } from './tools'
-import { startJob, listJobs, startEditJob } from './jobs'
+import { startJob, listJobs, startEditJob, clearFinished, removeJob } from './jobs'
 import type { ActionId } from '@shared/formats'
 import type { ActionOptions, Job } from '@shared/types'
 import { toDocx, toHwpx } from './engines/docmodel'
@@ -233,6 +233,16 @@ export async function runSelfTest(dir: string): Promise<boolean> {
   console.log(`${ejd.status === 'done' ? 'PASS' : 'FAIL'}  pdf.edit  ${ejd.files[0].message}`)
   if (ejd.status !== 'done') ok = false
   results.push({ action: 'pdf.edit', status: ejd.status, files: ejd.files })
+  // ---------- job history: remove one, then clear all finished
+  {
+    const before = listJobs().length
+    const one = listJobs()[0]
+    const afterOne = removeJob(one.id).length
+    const afterAll = clearFinished().length
+    const pass = before > 1 && afterOne === before - 1 && afterAll === 0
+    if (!pass) ok = false
+    console.log(`${pass ? 'PASS' : 'FAIL'}  job-history  ${before} → ${afterOne} → ${afterAll}`)
+  }
   await fs.writeFile(P('selftest-report.json'), JSON.stringify(results, null, 2))
   return ok
 }
