@@ -32,7 +32,7 @@ const toSec = (t?: string): number | undefined => {
 const CRF = { high: 19, medium: 23, low: 28 } as const
 const VT_Q = { high: 70, medium: 58, low: 45 } as const
 
-async function videoEncoderArgs(o: ActionOptions, info: ProbeInfo, budgetKbps?: number): Promise<string[]> {
+export async function videoEncoderArgs(o: ActionOptions, info: ProbeInfo, budgetKbps?: number): Promise<string[]> {
   const hevc = o.codec === 'h265'
   const q = o.vquality ?? 'high'
   if (o.hwaccel) {

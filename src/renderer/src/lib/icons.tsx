@@ -19,3 +19,4 @@ export const IcUndo = () => (<I width="16" height="16"><path d="M9 14L4 9l5-5M4 
 export const IcRedo = () => (<I width="16" height="16"><path d="M15 14l5-5-5-5M20 9H9a5 5 0 000 10h3" /></I>)
 export const IcLibrary = () => (<I><rect x="3" y="5" width="14" height="14" /><path d="M7 3h14v14" /><path d="M3 15l4-4 4 4 3-3 3 3" /></I>)
 export const IcEdit = () => (<I width="15" height="15"><path d="M4 20h4L19 9l-4-4L4 16z" /></I>)
+export const IcFilm = () => (<I><rect x="3" y="5" width="18" height="14" /><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4" /></I>)

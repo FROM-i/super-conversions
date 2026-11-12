@@ -16,6 +16,8 @@ import { applyEdits, compressPdf, encryptPdf, mergePdfs, signPdf, splitPdf } fro
 import { docToHwpFile, hwpSwapFile, hwpToDocxFile, hwpToPdfFile } from './engines/hwp'
 import { downloadUrl, siteOf } from './engines/download'
 import { rasterizePdf, pdfPageCount } from './render'
+import { renderEdit, LEVELS } from './engines/video-edit'
+import type { VideoEditRequest } from '@shared/types'
 
 const jobs = new Map<string, Job>()
 const aborts = new Map<string, AbortController>()
@@ -454,3 +456,40 @@ export async function startDownloadJob(urls: string[]): Promise<Job> {
 }
 
 
+
+/** Simple video editor export → <first clip dir>/SUPER CONVERSIONS/V<n>/<name>.mp4 */
+export async function startVideoEditJob(req: VideoEditRequest): Promise<Job> {
+  const first = req.segments[0]?.path
+  if (!first) throw new Error('타임라인이 비어 있습니다.')
+  const job = newJob('video-edit', [first], {}, `${req.segments.length}개 조각 · ${LEVELS[req.level].label}`)
+  const ac = new AbortController()
+  aborts.set(job.id, ac)
+  const planner = new OutputPlanner()
+  job.status = 'running'
+  touch(job, true)
+  const fr = job.files[0]
+  fr.status = 'running'
+  void (async () => {
+    try {
+      const dst = await planner.pathNamed(first, req.name?.trim() || stem(first) + '_편집', 'mp4')
+      const bytesIn = (await Promise.all([...new Set(req.segments.map((s) => s.path))].map((p) => fs.stat(p).then((x) => x.size)))).reduce((a, b) => a + b, 0)
+      const r = await renderEdit(req.segments, req.level, req.height, dst, (p) => {
+        fr.progress = p
+        touch(job)
+      }, ac.signal)
+      fr.outputs = [dst]
+      fr.status = 'done'
+      fr.progress = 1
+      const mm = Math.floor(r.duration / 60)
+      const ss = Math.round(r.duration % 60)
+      fr.message = `${mm}:${String(ss).padStart(2, '0')} · ${r.width}×${r.height}`
+      fr.report = { bytesIn, bytesOut: (await fs.stat(dst)).size, notes: [`${LEVELS[req.level].label} 수준으로 내보냄`] }
+    } catch (e) {
+      fr.status = ac.signal.aborted ? 'cancelled' : 'error'
+      fr.message = (e as Error).message
+    }
+    job.outDirs = planner.dirs
+    finish(job, ac, planner)
+  })()
+  return job
+}

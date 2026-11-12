@@ -3,15 +3,16 @@ import type { ActionId } from '@shared/formats'
 import type { EngineStatus, Job, Settings, UpdateState } from '@shared/types'
 import { sc } from './lib/api'
 import { cls } from './lib/util'
-import { IcDown, IcGear, IcGrid, IcJobs, IcPdf, IcLibrary } from './lib/icons'
+import { IcDown, IcGear, IcGrid, IcJobs, IcPdf, IcLibrary, IcFilm } from './lib/icons'
 import ConvertView from './views/ConvertView'
 import JobsView from './views/JobsView'
 import DownloadView from './views/DownloadView'
 import SettingsView from './views/SettingsView'
 import PdfEditor from './views/PdfEditor'
 import LibraryView from './views/LibraryView'
+import VideoEditor from './views/VideoEditor'
 
-type View = 'convert' | 'library' | 'download' | 'edit' | 'jobs' | 'settings'
+type View = 'convert' | 'library' | 'video' | 'download' | 'edit' | 'jobs' | 'settings'
 
 export default function App() {
   const [view, setView] = useState<View>('convert')
@@ -26,6 +27,11 @@ export default function App() {
   const [pendingAction, setPendingAction] = useState<ActionId | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [upd, setUpd] = useState<UpdateState | null>(null)
+  const [videoInbox, setVideoInbox] = useState<string[]>([])
+  const editVideos = useCallback((paths: string[]) => {
+    setVideoInbox(paths)
+    setView('video')
+  }, [])
   const toastT = useRef<number>(0)
   const dragDepth = useRef(0)
 
@@ -62,12 +68,18 @@ export default function App() {
       setView('edit')
     }
     window.addEventListener('sc-open-editor', openEd)
+    const editVid = (e: Event) => {
+      setVideoInbox((e as CustomEvent<string[]>).detail)
+      setView('video')
+    }
+    window.addEventListener('sc-edit-videos', editVid)
     return () => {
       off1()
       off2()
       offU()
       offV()
       window.removeEventListener('sc-open-editor', openEd)
+      window.removeEventListener('sc-edit-videos', editVid)
     }
   }, [refreshEngines])
 
@@ -99,6 +111,10 @@ export default function App() {
       if (!e.dataTransfer?.files.length) return
       e.preventDefault()
       const paths = [...e.dataTransfer.files].map((f) => sc.pathForFile(f)).filter(Boolean)
+      if (view === 'video') {
+        setVideoInbox(paths)
+        return
+      }
       if (view === 'library') {
         const n = await sc.libraryImport(paths)
         toast(n ? `${n}개 이미지를 라이브러리에 담았습니다` : '이미지 파일만 담을 수 있습니다')
@@ -140,6 +156,7 @@ export default function App() {
   const NAV: [View, string, React.ReactElement][] = [
     ['convert', '변환', <IcGrid key="g" />],
     ['library', '스크린샷 라이브러리', <IcLibrary key="l" />],
+    ['video', '영상 편집', <IcFilm key="v" />],
     ['download', '영상 다운로드', <IcDown key="d" />],
     ['edit', 'PDF 편집', <IcPdf key="p" />],
     ['jobs', '작업 · 결과', <IcJobs key="j" />]
@@ -227,11 +244,15 @@ export default function App() {
           />
         )}
         {view === 'library' && <LibraryView settings={settings} setSettings={setSettings} engines={engines} toast={toast} onOpenSettings={() => setView('settings')} />}
-        {view === 'download' && <DownloadView incoming={links} clearIncoming={() => setLinks([])} settings={settings} setSettings={setSettings} jobs={jobs} toast={toast} />}
+        {/* kept mounted so the timeline survives switching menus */}
+        <div style={{ display: view === 'video' ? 'block' : 'none', height: '100%' }}>
+          <VideoEditor active={view === 'video'} inbox={videoInbox} clearInbox={() => setVideoInbox([])} toast={toast} />
+        </div>
+        {view === 'download' && <DownloadView onEdit={editVideos} incoming={links} clearIncoming={() => setLinks([])} settings={settings} setSettings={setSettings} jobs={jobs} toast={toast} />}
         {view === 'edit' && <PdfEditor path={editPath} settings={settings} onClose={() => (setEditPath(null), setView('convert'))} toast={toast} />}
         {view === 'jobs' && <JobsView jobs={jobs} />}
         {view === 'settings' && <SettingsView settings={settings} setSettings={setSettings} engines={engines} refreshEngines={refreshEngines} toast={toast} />}
-        {dragging && <div className="drop-veil">{view === 'library' ? '라이브러리에 담기' : '놓으면 추가됩니다'}</div>}
+        {dragging && <div className="drop-veil">{view === 'library' ? '라이브러리에 담기' : view === 'video' ? '편집할 영상 추가' : '놓으면 추가됩니다'}</div>}
       </main>
       {toastMsg && <div className="toast">{toastMsg}</div>}
     </div>

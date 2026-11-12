@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ActionId } from '@shared/formats'
-import type { ActionOptions, EditDocument, EngineStatus, Job, LibraryItem, Settings, UpdateState, UrlInfo } from '@shared/types'
+import type { ActionOptions, EditDocument, EngineStatus, Job, LibraryItem, Settings, UpdateState, UrlInfo, VideoClipInfo, VideoEditRequest } from '@shared/types'
 import type { RenameItem, RenameRule, RenamePlanRow } from '@shared/rename'
 
 export interface RenameResult {
@@ -13,7 +13,9 @@ export interface RenameResult {
 const on = <A extends unknown[]>(ch: string, cb: (...a: A) => void) => {
   const fn = (_e: unknown, ...a: unknown[]) => cb(...(a as A))
   ipcRenderer.on(ch, fn)
-  return () => ipcRenderer.removeListener(ch, fn)
+  return (): void => {
+    ipcRenderer.removeListener(ch, fn)
+  }
 }
 
 const api = {
@@ -78,6 +80,14 @@ const api = {
   renameBatch: (items: RenameItem[], rule: RenameRule): Promise<RenameResult> => ipcRenderer.invoke('files:renameBatch', items, rule),
   renameOne: (from: string, newName: string): Promise<RenameResult> => ipcRenderer.invoke('files:renameOne', from, newName),
   renameUndo: (): Promise<RenameResult> => ipcRenderer.invoke('files:renameUndo'),
+  // video editor
+  videoInfo: (p: string): Promise<VideoClipInfo> => ipcRenderer.invoke('video:info', p),
+  videoFilmstrip: (p: string, duration: number): Promise<{ url: string; frames: number } | null> => ipcRenderer.invoke('video:filmstrip', p, duration),
+  videoUrl: (p: string): Promise<string> => ipcRenderer.invoke('video:url', p),
+  videoProxy: (p: string): Promise<string> => ipcRenderer.invoke('video:proxy', p),
+  onProxyProgress: (cb: (path: string, p: number) => void) => on<[string, number]>('video:proxyProgress', cb),
+  videoExport: (req: VideoEditRequest): Promise<Job> => ipcRenderer.invoke('video:export', req),
+  pickVideos: (): Promise<string[]> => ipcRenderer.invoke('video:pick'),
   // render worker
   onRenderRequest: (cb: (id: string, req: Record<string, unknown>) => void) => on<[string, Record<string, unknown>]>('render:request', cb),
   renderReply: (id: string, ok: boolean, payload: unknown) => ipcRenderer.send('render:reply', id, ok, payload),

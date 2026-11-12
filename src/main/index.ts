@@ -18,6 +18,12 @@ import { renameFiles, renameOne, undoLastRename } from './rename'
 import { ensureTray, refreshTray, destroyTray, keepAlive, applyLoginItem } from './tray'
 import type { RenameItem, RenameRule } from '@shared/rename'
 import { existsSync } from 'fs'
+import { registerMediaScheme, handleMediaScheme, mediaUrl } from './media-protocol'
+import { clipInfo, filmstrip, previewProxy } from './engines/video-edit'
+import { startVideoEditJob } from './jobs'
+import type { VideoEditRequest } from '@shared/types'
+
+registerMediaScheme()
 
 let main: BrowserWindow | null = null
 let quitting = false
@@ -264,6 +270,19 @@ function registerIpc() {
     main?.webContents.send('library:changed')
     return r
   })
+  // ---- simple video editor
+  ipcMain.handle('video:info', (_e, p: string) => clipInfo(p))
+  ipcMain.handle('video:filmstrip', (_e, p: string, duration: number) => filmstrip(p, duration))
+  ipcMain.handle('video:url', (_e, p: string) => mediaUrl(p))
+  ipcMain.handle('video:proxy', async (e, p: string) => mediaUrl(await previewProxy(p, (x) => e.sender.send('video:proxyProgress', p, x))))
+  ipcMain.handle('video:export', (_e, req: VideoEditRequest) => startVideoEditJob(req))
+  ipcMain.handle('video:pick', async () => {
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() ?? main!, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: '영상', extensions: ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', 'wmv', 'flv', '3gp', 'mts', 'm2ts'] }]
+    })
+    return r.canceled ? [] : r.filePaths
+  })
   ipcMain.handle('files:exists', (_e, paths: string[]) => paths.filter((p) => existsSync(p)))
   ipcMain.handle('engines:status', () => engineStatus())
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }))
@@ -341,6 +360,7 @@ app.whenReady().then(async () => {
   if (isMac) Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]))
   else Menu.setApplicationMenu(null)
   registerIpc()
+  handleMediaScheme()
   initUpdater(getSettings().autoUpdateApp)
   const st = process.argv.indexOf('--sc-selftest')
   if (st >= 0) {
@@ -423,10 +443,10 @@ async function devShots(dir: string, files: string[]) {
     await wait(3000)
     await shot('06-editor')
   }
-  await js(`document.querySelectorAll('.rail button')[2].click()`)
+  await js(`document.querySelectorAll('.rail button')[3].click()`)
   await wait(600)
   await shot('07-download')
-  await js(`document.querySelectorAll('.rail button')[5].click()`)
+  await js(`document.querySelectorAll('.rail button')[6].click()`)
   await wait(900)
   await shot('08-settings')
   // library demo: seed screenshots
@@ -458,11 +478,29 @@ async function devShots(dir: string, files: string[]) {
   await shot('10-rename')
   await js(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   await wait(300)
-  await js(`document.querySelectorAll('.rail button')[5].click()`)
+  await js(`document.querySelectorAll('.rail button')[6].click()`)
   await wait(500)
   await js(`document.querySelectorAll('.settings nav button')[1].click()`)
   await wait(900)
   await shot('11-library-settings')
+  const vids = files.filter((f) => /\.(mov|mp4)$/i.test(f))
+  if (vids.length) {
+    await js(`window.dispatchEvent(new CustomEvent('sc-edit-videos', { detail: ${JSON.stringify(vids)} }))`)
+    await wait(5000)
+    await shot('12-video')
+    await js(`(() => { const r = document.querySelector('.vruler').getBoundingClientRect(); document.querySelector('.vruler').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width * 0.28, clientY: r.top + 5 })) })()`)
+    await wait(600)
+    await js(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }))`)
+    await wait(600)
+    await js(`(() => { const s = document.querySelectorAll('.vseg')[1]; const r = s.getBoundingClientRect(); s.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + 20, clientY: r.top + 20 })) })()`)
+    await wait(400)
+    await js(`[...document.querySelectorAll('.vspeed .seg button')].find((b) => b.textContent === '2x').click()`)
+    await wait(2500)
+    await shot('13-video-edit')
+    await js(`[...document.querySelectorAll('.toolbar .btn')].find((b) => b.textContent.includes('내보내기')).click()`)
+    await wait(700)
+    await shot('14-video-export')
+  }
   app.exit(0)
 }
 

@@ -11,11 +11,12 @@ interface Props {
   setSettings: (s: Settings) => void
   jobs: Job[]
   toast: (m: string) => void
+  onEdit: (paths: string[]) => void
 }
 
 const SITES = ['YouTube', 'Instagram', 'TikTok', 'Pinterest', 'Threads', 'X', 'Vimeo']
 
-export default function DownloadView({ incoming, clearIncoming, settings, setSettings, jobs, toast }: Props) {
+export default function DownloadView({ incoming, clearIncoming, settings, setSettings, jobs, toast, onEdit }: Props) {
   const [text, setText] = useState('')
   const [items, setItems] = useState<UrlInfo[]>([])
 
@@ -155,6 +156,11 @@ export default function DownloadView({ incoming, clearIncoming, settings, setSet
                       <span className="dot" />
                       {f.status === 'running' ? `${Math.round(f.progress * 100)}%` : f.status === 'done' ? '완료' : f.status === 'error' ? '실패' : '대기'}
                     </span>
+                    {f.outputs.some((o) => /\.(mp4|mov|webm|mkv|m4v)$/i.test(o)) && (
+                      <button className="btn" onClick={() => onEdit(f.outputs.filter((o) => /\.(mp4|mov|webm|mkv|m4v)$/i.test(o)))} title="이 영상을 영상 편집으로 보냅니다">
+                        편집하기
+                      </button>
+                    )}
                     {f.outputs[0] && (
                       <button className="btn ghost" onClick={() => sc.reveal(f.outputs[0])}>
                         보기

@@ -169,6 +169,34 @@ export interface Settings {
   closeToTray: boolean
 }
 
+// ---------- simple video editor ----------
+export interface VideoClipInfo {
+  path: string
+  duration: number
+  width: number
+  height: number
+  fps: number
+  hasAudio: boolean
+  vcodec?: string
+}
+
+export interface EditSegment {
+  path: string
+  start: number // seconds in the source
+  end: number
+  speed: number // 0.25 – 4
+  muted: boolean
+}
+
+export type ExportLevel = 'high' | 'balanced' | 'light' | 'tiny'
+
+export interface VideoEditRequest {
+  segments: EditSegment[]
+  level: ExportLevel
+  height: number // 0 = original
+  name: string
+}
+
 export interface LibraryItem {
   path: string
   name: string
@@ -206,7 +234,7 @@ export interface QualityReport {
 
 export interface Job {
   id: string
-  action: ActionId | 'download'
+  action: ActionId | 'download' | 'video-edit'
   options: ActionOptions
   files: FileResult[]
   status: JobStatus

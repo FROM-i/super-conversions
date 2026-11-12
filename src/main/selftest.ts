@@ -14,6 +14,10 @@ import { renameFiles, undoLastRename } from './rename'
 import { DEFAULT_RULE } from '@shared/rename'
 import { startLibrary, stopLibrary, listLibrary } from './library'
 import { existsSync } from 'fs'
+import { net } from 'electron'
+import { startVideoEditJob } from './jobs'
+import { clipInfo, atempoChain } from './engines/video-edit'
+import { mediaUrl } from './media-protocol'
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -168,6 +172,45 @@ export async function runSelfTest(dir: string): Promise<boolean> {
     console.log(`${pass ? 'PASS' : 'FAIL'}  library  collected=${got} moved=${moved}`)
     results.push({ action: 'library', status: pass ? 'PASS' : 'FAIL' })
     await saveSettings({ libraryDir: '', libraryExtraFolders: [] })
+  }
+
+  // ---------- simple video editor: cut + join + speed + mute + clip without audio
+  if (ff && existsSync(P('clip.mov'))) {
+    await run(ff, ['-y', '-f', 'lavfi', '-i', 'testsrc2=size=720x1280:rate=30:duration=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', P('vertical_noaudio.mp4')])
+    const t0 = Date.now()
+    const j = await until(
+      await startVideoEditJob({
+        segments: [
+          { path: P('clip.mov'), start: 0, end: 1.5, speed: 2, muted: false },
+          { path: P('clip.mov'), start: 2, end: 4, speed: 0.5, muted: true },
+          { path: P('vertical_noaudio.mp4'), start: 0.5, end: 1.5, speed: 1, muted: false },
+          { path: P('clip.mov'), start: 3, end: 4, speed: 4, muted: false }
+        ],
+        level: 'light',
+        height: 720,
+        name: '편집 테스트'
+      })
+    )
+    const out = j.files[0].outputs[0]
+    let dur = 0
+    let dims = ''
+    if (out) {
+      const info = await clipInfo(out)
+      dur = info.duration
+      dims = `${info.width}x${info.height}`
+    }
+    const expected = 0.75 + 4 + 1 + 0.25
+    const pass = j.status === 'done' && Math.abs(dur - expected) < 0.35 && dims === '1280x720' && atempoChain(0.25) === 'atempo=0.5,atempo=0.5' && atempoChain(4) === 'atempo=2,atempo=2'
+    if (!pass) ok = false
+    console.log(`${pass ? 'PASS' : 'FAIL'}  video.edit  ${Date.now() - t0}ms  dur=${dur.toFixed(2)} (expect ${expected}) ${dims} ${j.files[0].message ?? ''}`)
+    results.push({ action: 'video.edit', status: pass ? 'PASS' : 'FAIL', out, dur, dims })
+
+    // preview protocol must answer HTTP Range requests (seeking)
+    const res = await net.fetch(mediaUrl(P('clip.mov')), { headers: { Range: 'bytes=100-199' } })
+    const buf = Buffer.from(await res.arrayBuffer())
+    const pass2 = res.status === 206 && buf.length === 100 && /^bytes 100-199\//.test(res.headers.get('content-range') ?? '')
+    if (!pass2) ok = false
+    console.log(`${pass2 ? 'PASS' : 'FAIL'}  media-protocol  status=${res.status} len=${buf.length} ${res.headers.get('content-range')}`)
   }
 
   // editor apply

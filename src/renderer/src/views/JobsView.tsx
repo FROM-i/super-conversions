@@ -50,16 +50,16 @@ export default function JobsView({ jobs }: { jobs: Job[] }) {
       </div>
       {!jobs.length && <div className="empty-state">아직 작업이 없습니다.</div>}
       {jobs.map((j) => {
-        const def = j.action === 'download' ? null : ACTION_BY_ID[j.action]
+        const def = j.action === 'download' || j.action === 'video-edit' ? null : ACTION_BY_ID[j.action]
         const tone = def ? toneOf(def.category) : 'tone-video'
         const done = j.files.filter((f) => f.status === 'done').length
         return (
           <div key={j.id} className={cls('job', tone)}>
             <div className="job-head">
-              <div className="sq">{def ? def.label : 'DL'}</div>
+              <div className="sq">{def ? def.label : j.action === 'video-edit' ? 'EDIT' : 'DL'}</div>
               <div className="grow">
                 <div className="t">
-                  {def ? `${def.label} · ${def.hint}` : '영상 다운로드'} {j.title && <span className="muted">· {j.title}</span>}
+                  {def ? `${def.label} · ${def.hint}` : j.action === 'video-edit' ? '영상 편집 · 내보내기' : '영상 다운로드'} {j.title && <span className="muted">· {j.title}</span>}
                 </div>
                 <div className="muted" style={{ fontSize: 11.5 }}>
                   {STATUS[j.status]} · {done}/{j.files.length} · {new Date(j.createdAt).toLocaleTimeString()}

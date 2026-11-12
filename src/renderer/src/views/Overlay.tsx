@@ -50,7 +50,7 @@ export default function Overlay() {
       <svg className="ring" viewBox="0 0 100 100" preserveAspectRatio="none">
         <rect x="0" y="0" width="100" height="100" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - total * 100} vectorEffect="non-scaling-stroke" />
       </svg>
-      <span className="hint">{job.action !== 'download' ? ACTION_BY_ID[job.action].label : ''}</span>
+      <span className="hint">{job.action !== 'download' && job.action !== 'video-edit' ? ACTION_BY_ID[job.action].label : ''}</span>
       <span className="lab">
         {job.status === 'running' || job.status === 'queued' ? `${Math.round(total * 100)}%` : failed.length ? 'CHECK' : 'DONE'}
       </span>
