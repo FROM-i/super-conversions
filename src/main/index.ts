@@ -389,6 +389,7 @@ app.whenReady().then(async () => {
       main!.webContents.once('did-finish-load', () => main?.webContents.send('main:load', files))
     }
   }
+  if (process.env.SC_UICHECK && !app.isPackaged) devUiCheck(process.env.SC_UICHECK, process.env.SC_DEMO_FILES?.split('|') ?? [])
   if (process.env.SC_SHOT && !app.isPackaged) devShots(process.env.SC_SHOT, process.env.SC_DEMO_FILES?.split('|') ?? [])
   if (getSettings().autoUpdateDownloader) updateYtdlp().catch(() => undefined)
   app.on('activate', () => {
@@ -513,4 +514,81 @@ function syncTray() {
   if (keepAlive()) ensureTray((v) => focusMain(v))
   else destroyTray()
   refreshTray((v) => focusMain(v))
+}
+
+// ---------------------------------------------------------------- dev: scripted UI checks (layout, scroll, playback)
+async function devUiCheck(dir: string, files: string[]) {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  const js = <T = unknown>(code: string) => main!.webContents.executeJavaScript(code) as Promise<T>
+  const shot = async (name: string) => fs.writeFile(join(dir, name + '.png'), (await main!.webContents.capturePage()).toPNG())
+  const out: string[] = []
+  const log = (ok: boolean, msg: string) => (out.push(`${ok ? 'PASS' : 'FAIL'}  ${msg}`), console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`))
+  try {
+    await wait(3500)
+    // ---- library with many items must scroll
+    const libDir = libraryDir()
+    await fs.mkdir(libDir, { recursive: true })
+    const img = files.find((f) => /\.(jpe?g|png)$/i.test(f))!
+    for (let k = 0; k < 60; k++) await fs.copyFile(img, join(libDir, `스크린샷 ${String(k).padStart(2, '0')}.jpg`))
+    await js(`document.querySelectorAll('.rail button')[1].click()`)
+    await wait(2500)
+    const lib = await js<{ sh: number; ch: number; st: number; vw: number; dw: number }>(`(() => { const el = document.querySelector('.lib-scroll'); el.scrollTop = 400; return { sh: el.scrollHeight, ch: el.clientHeight, st: el.scrollTop, vw: innerWidth, dw: document.documentElement.scrollWidth } })()`)
+    log(lib.sh > lib.ch && lib.st > 0, `library scrolls vertically (scrollHeight ${lib.sh} > clientHeight ${lib.ch}, scrolled to ${lib.st})`)
+    await shot('ui-library-scrolled')
+    // narrow window → whole view scrolls horizontally instead of cutting off
+    main!.setMinimumSize(400, 400)
+    main!.setSize(760, 600)
+    await wait(800)
+    const nar = await js<{ sw: number; cw: number; sl: number }>(`(() => { const v = document.querySelector('.view'); v.scrollLeft = 200; return { sw: v.scrollWidth, cw: v.clientWidth, sl: v.scrollLeft } })()`)
+    log(nar.sw > nar.cw && nar.sl > 0, `narrow window: view scrolls horizontally (scrollWidth ${nar.sw} > ${nar.cw})`)
+    await shot('ui-narrow')
+    main!.setSize(1240, 820)
+    await wait(800)
+
+    // ---- video editor
+    const vids = files.filter((f) => /\.(mov|mp4)$/i.test(f))
+    await js(`window.dispatchEvent(new CustomEvent('sc-edit-videos', { detail: ${JSON.stringify(vids)} }))`)
+    await wait(4000)
+    const fit = await js<{ vw: number; vh: number; sw: number; sh: number; inView: boolean }>(`(() => { const v = document.querySelector('.vedit-video'); const st = document.querySelector('.vedit-stage').getBoundingClientRect(); const r = v.getBoundingClientRect(); return { vw: r.width, vh: r.height, sw: st.width, sh: st.height, inView: document.querySelector('.vedit-timeline').getBoundingClientRect().bottom <= innerHeight + 1 } })()`)
+    log(Math.abs(fit.vw - fit.sw) < 2 && Math.abs(fit.vh - fit.sh) < 2 && fit.inView, `preview fills stage (${Math.round(fit.vw)}×${Math.round(fit.vh)} = stage ${Math.round(fit.sw)}×${Math.round(fit.sh)}), timeline on screen=${fit.inView}`)
+    // play → time advances
+    await js(`document.querySelector('.vplay').click()`)
+    await wait(1800)
+    const p1 = await js<{ paused: boolean; t: number; label: string }>(`(() => { const v = document.querySelector('.vedit-video'); return { paused: v.paused, t: v.currentTime, label: document.querySelector('.vtime').textContent } })()`)
+    log(!p1.paused && p1.t > 0.5, `play: video playing (currentTime ${p1.t.toFixed(2)}, ${p1.label})`)
+    await js(`document.querySelector('.vplay').click()`)
+    await wait(500)
+    const p2 = await js<{ paused: boolean; t: number }>(`(() => { const v = document.querySelector('.vedit-video'); return { paused: v.paused, t: v.currentTime } })()`)
+    await wait(600)
+    const p3 = await js<number>(`document.querySelector('.vedit-video').currentTime`)
+    log(p2.paused && Math.abs(p3 - p2.t) < 0.01, `pause: stays paused (${p2.t.toFixed(2)} → ${p3.toFixed(2)})`)
+    // play again resumes from same spot, then plays across segment boundary to the end
+    await js(`document.querySelector('.vplay').click()`)
+    await wait(1200)
+    const p4 = await js<{ paused: boolean; t: number }>(`(() => { const v = document.querySelector('.vedit-video'); return { paused: v.paused, t: v.currentTime } })()`)
+    log(!p4.paused && p4.t > p3, `resume: continues (${p3.toFixed(2)} → ${p4.t.toFixed(2)})`)
+    await js(`document.querySelector('.vplay').click()`)
+    // scrub: press on ruler and drag
+    const scrub = await js<{ before: string; after: string }>(`(async () => {
+      const tr = document.querySelector('.vtrack'); const r = tr.getBoundingClientRect(); const before = document.querySelector('.vtime').textContent
+      tr.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 10, clientY: r.top + 10, button: 0 }))
+      for (let x = 10; x <= r.width * 0.6; x += 40) { window.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + x, clientY: r.top + 10 })); await new Promise(r => requestAnimationFrame(r)) }
+      window.dispatchEvent(new PointerEvent('pointerup', {}))
+      await new Promise(r => setTimeout(r, 300))
+      return { before, after: document.querySelector('.vtime').textContent } })()`)
+    log(scrub.before !== scrub.after, `scrub drag moves playhead (${scrub.before} → ${scrub.after})`)
+    await shot('ui-video')
+    // zoom to max: page must not grow, only the timeline scrolls
+    const z = await js<{ dw: number; vw: number; tsw: number; tcw: number }>(`(async () => {
+      const r = document.querySelector('.vzoom input'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, '12'); r.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise(r => setTimeout(r, 500))
+      const sc = document.querySelector('.vtrack-scroll'); const view = document.querySelector('.view')
+      return { dw: view.scrollWidth, vw: view.clientWidth, tsw: sc.scrollWidth, tcw: sc.clientWidth } })()`)
+    log(z.dw <= z.vw + 1 && z.tsw > z.tcw * 5, `zoom max: tool stays in window (view ${z.dw}/${z.vw}), timeline scrolls (${z.tsw}/${z.tcw})`)
+    await shot('ui-video-zoomed')
+  } catch (e) {
+    log(false, 'exception ' + (e as Error).message)
+  }
+  await fs.writeFile(join(dir, 'ui-check.txt'), out.join('\n'))
+  app.exit(out.some((l) => l.startsWith('FAIL')) ? 1 : 0)
 }

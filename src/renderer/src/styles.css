@@ -179,8 +179,9 @@ textarea {
 /* ------------------------------------------------------------ app shell */
 .app {
   display: grid;
-  grid-template-columns: var(--rail) 1fr;
-  grid-template-rows: var(--top) 1fr;
+  /* minmax(0, …) stops content from stretching the window → inner areas can scroll */
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  grid-template-rows: var(--top) minmax(0, 1fr);
   height: 100%;
 }
 .topbar {
@@ -323,8 +324,24 @@ textarea {
 .view {
   grid-row: 2;
   grid-column: 2;
-  overflow: hidden;
+  overflow: auto; /* narrow / short windows: scroll the whole view instead of cutting it off */
   position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+/* every screen keeps a usable minimum size; below it the view scrolls horizontally/vertically */
+.board,
+.settings,
+.editor,
+.vedit {
+  min-width: 880px;
+}
+.board,
+.editor {
+  min-height: 420px;
+}
+.vedit {
+  min-height: 600px;
 }
 
 /* ------------------------------------------------------------ dropzone */
@@ -472,14 +489,16 @@ textarea {
 /* ------------------------------------------------------------ file board */
 .board {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
 .board-main {
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
+  min-height: 0;
 }
 .toolbar {
   display: flex;
@@ -541,6 +560,7 @@ textarea {
 }
 .tiles {
   overflow: auto;
+  min-height: 0;
   padding: 20px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
@@ -1216,7 +1236,8 @@ textarea.inp {
 /* ------------------------------------------------------------ settings */
 .settings {
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
 .settings nav {
@@ -1344,8 +1365,8 @@ textarea.inp {
 /* ------------------------------------------------------------ pdf editor */
 .editor {
   display: grid;
-  grid-template-columns: 168px 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
 }
 .ed-tools {
@@ -1633,9 +1654,9 @@ textarea.inp {
 /* ------------------------------------------------------------ simple video editor */
 .vedit {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
-  min-height: 0;
 }
 .vedit-job {
   display: flex;
@@ -1657,8 +1678,10 @@ textarea.inp {
 }
 .vedit-main {
   display: grid;
-  grid-template-rows: minmax(160px, 1fr) auto auto auto;
+  grid-template-rows: minmax(240px, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
+  min-width: 0;
 }
 .vedit-stage {
   position: relative;
@@ -1669,8 +1692,9 @@ textarea.inp {
   overflow: hidden;
 }
 .vedit-video {
-  max-width: 100%;
-  max-height: 100%;
+  /* always fills the stage box and letterboxes at the clip's own aspect ratio */
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -1691,7 +1715,7 @@ textarea.inp {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
@@ -1778,12 +1802,17 @@ textarea.inp {
 .vedit-guide {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 8px 20px;
-  font-size: var(--fs-s);
+  gap: 14px;
+  padding: 5px 16px;
+  font-size: var(--fs-xs);
   color: var(--ink-2);
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vedit-guide > span {
+  flex: none;
 }
 .vedit-guide i {
   font-style: normal;
@@ -1801,17 +1830,19 @@ textarea.inp {
   font-weight: 500;
 }
 .vedit-timeline {
-  padding: 12px 16px 14px;
+  padding: 8px 16px 8px;
   background: var(--surface);
+  min-width: 0;
 }
 .vtrack-scroll {
   overflow-x: auto;
+  max-width: 100%;
   overflow-y: hidden;
   padding-bottom: 6px;
 }
 .vtrack {
   position: relative;
-  height: 112px;
+  height: 96px;
   min-width: 100%;
 }
 .vruler {
@@ -1833,12 +1864,12 @@ textarea.inp {
 }
 .vsegs {
   position: absolute;
-  inset: 30px 0 0 0;
+  inset: 28px 0 0 0;
 }
 .vseg {
   position: absolute;
   top: 0;
-  height: 76px;
+  height: 62px;
   background-color: var(--tile);
   background-repeat: no-repeat;
   border: 1px solid var(--line-strong);
@@ -1884,7 +1915,7 @@ textarea.inp {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 10px;
+  width: 14px;
   background: var(--tone);
   cursor: ew-resize;
   z-index: 3;
@@ -1914,10 +1945,11 @@ textarea.inp {
 .vplayhead span {
   position: absolute;
   top: 0;
-  left: -6px;
-  width: 10px;
-  height: 10px;
+  left: -7px;
+  width: 12px;
+  height: 14px;
   background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%);
 }
 .vzoom {
   display: flex;
@@ -1993,9 +2025,12 @@ textarea.inp {
 }
 
 .vedit-body {
+  grid-row: 3;
   display: grid;
-  grid-template-columns: 188px 1fr;
+  grid-template-columns: 188px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+  min-width: 0;
 }
 .vedit-bin {
   border-right: 1px solid var(--line);
@@ -2045,4 +2080,29 @@ textarea.inp {
   font-size: 10px;
   font-weight: 600;
   padding: 0 4px;
+}
+
+.vtrack {
+  cursor: ew-resize;
+  touch-action: none;
+}
+.vseg {
+  cursor: ew-resize;
+}
+.vgrip {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  background: var(--ink);
+  color: var(--inverse);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 7px;
+  cursor: grab;
+  white-space: nowrap;
+}
+.vgrip:active {
+  cursor: grabbing;
 }

@@ -160,8 +160,7 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
     const used = segsRef.current.filter((x) => x.path === path).length
     if (used && !window.confirm(`타임라인에서 이 영상으로 만든 조각 ${used}개도 함께 빠집니다. 계속할까요?\n(컴퓨터의 원본 파일은 지워지지 않습니다)`)) return
     if (used) {
-      video.current?.pause()
-      setPlaying(false)
+      pause()
       loadedPath.current = null
       commit((ss) => ss.filter((x) => x.path !== path))
       setSel(new Set())
@@ -175,40 +174,100 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
   }
 
   // ---------------------------------------------------------------- playback
-  const loadSeg = useCallback(async (i: number, src: number, autoplay: boolean) => {
+  // `wantPlay` is the user's intent. The loop below keeps the <video> element in line with it,
+  // which survives interrupted play() calls, segment switches and slow seeks.
+  const wantPlay = useRef(false)
+  const loadToken = useRef(0)
+
+  const loadSeg = useCallback(async (i: number, src: number) => {
     const v = video.current
     const s = segsRef.current[i]
     if (!v || !s) return
     const clip = clipsRef.current[s.path]
     if (!clip) return
+    const token = ++loadToken.current
     curIdx.current = i
     if (loadedPath.current !== clip.url) {
       loadedPath.current = clip.url
       v.src = clip.url
-      await new Promise<void>((res) => {
-        const done = () => (v.removeEventListener('loadedmetadata', done), v.removeEventListener('error', done), res())
-        v.addEventListener('loadedmetadata', done)
-        v.addEventListener('error', done)
-      })
+      if (v.readyState < 1) {
+        await new Promise<void>((res) => {
+          const done = () => {
+            v.removeEventListener('loadedmetadata', done)
+            v.removeEventListener('error', done)
+            res()
+          }
+          v.addEventListener('loadedmetadata', done)
+          v.addEventListener('error', done)
+        })
+      }
+      if (token !== loadToken.current) return // a newer seek took over
     }
-    v.currentTime = src
+    if (Math.abs(v.currentTime - src) > 0.02) v.currentTime = src
     v.playbackRate = s.speed
     v.muted = s.muted
-    if (autoplay) await v.play().catch(() => undefined)
+    if (wantPlay.current && v.paused) v.play().catch(() => undefined)
   }, [])
 
+  // scrubbing: coalesce many seeks into one per animation frame
+  const seekTarget = useRef<number | null>(null)
+  const seekRaf = useRef(0)
   const seek = useCallback(
     (t: number) => {
       const tt = Math.max(0, Math.min(t, Math.max(0, offsets.total - 0.001)))
       setTl(tt)
       if (!segsRef.current.length) return
-      const { i, src } = locate(tt)
-      loadSeg(i, src, playing)
+      seekTarget.current = tt
+      if (seekRaf.current) return
+      seekRaf.current = requestAnimationFrame(() => {
+        seekRaf.current = 0
+        const target = seekTarget.current
+        if (target === null) return
+        const { i, src } = locate(target)
+        loadSeg(i, src)
+      })
     },
-    [offsets.total, locate, loadSeg, playing]
+    [offsets.total, locate, loadSeg]
   )
 
-  // keep the loop in sync with the video element
+  const advance = useCallback(() => {
+    const v = video.current
+    const ss = segsRef.current
+    const i = curIdx.current
+    const s = ss[i]
+    if (!v || !s) return
+    const next = ss[i + 1]
+    if (!next) {
+      wantPlay.current = false
+      v.pause()
+      setPlaying(false)
+      let acc = 0
+      for (const x of ss) acc += segDur(x)
+      setTl(acc)
+      return
+    }
+    // pieces that continue the same clip (e.g. after a cut) play on without reloading → no gap
+    if (next.path === s.path && Math.abs(next.start - v.currentTime) < 0.08) {
+      curIdx.current = i + 1
+      v.playbackRate = next.speed
+      v.muted = next.muted
+      return
+    }
+    loadSeg(i + 1, next.start)
+  }, [loadSeg])
+
+  // show (and buffer) the first frame as soon as a timeline exists, so the first ▶ starts instantly
+  const firstKey = segs.length ? `${segs[0].path}|${clips[segs[0].path]?.url ?? ''}` : ''
+  useEffect(() => {
+    if (!firstKey || loadedPath.current || playing) return
+    const v = video.current
+    if (v) v.preload = 'auto'
+    const { i, src } = locate(tl)
+    loadSeg(i, src)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstKey])
+
+  // playback loop: drives the playhead and segment boundaries while playing
   useEffect(() => {
     if (!playing) return
     let raf = 0
@@ -220,44 +279,69 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
       if (v && s) {
         let acc = 0
         for (let k = 0; k < i; k++) acc += segDur(ss[k])
-        setTl(acc + Math.max(0, v.currentTime - s.start) / s.speed)
-        if (v.currentTime >= s.end - 0.03) {
-          if (i + 1 < ss.length) loadSeg(i + 1, ss[i + 1].start, true)
-          else {
-            v.pause()
-            setPlaying(false)
-            setTl(acc + segDur(s))
-          }
-        }
+        const local = Math.min(Math.max(0, v.currentTime - s.start), s.end - s.start)
+        setTl(acc + local / s.speed)
+        if (v.currentTime >= s.end - 0.02 || v.ended) advance()
+        else if (wantPlay.current && v.paused && !v.seeking && v.readyState >= 2) v.play().catch(() => undefined)
       }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [playing, loadSeg])
+  }, [playing, advance])
 
-  const togglePlay = async () => {
+  const play = async () => {
     const v = video.current
-    if (!v || !segs.length) return
-    if (playing) {
-      v.pause()
-      setPlaying(false)
-      return
-    }
+    if (!v || !segsRef.current.length) return
     const start = tl >= total - 0.05 ? 0 : tl
-    const { i, src } = locate(start)
+    wantPlay.current = true
     setPlaying(true)
-    await loadSeg(i, src, true)
+    const { i, src } = locate(start)
+    await loadSeg(i, src)
+    if (!wantPlay.current) return
+    if (v.readyState < 3) {
+      await new Promise<void>((res) => {
+        const done = () => {
+          v.removeEventListener('canplay', done)
+          clearTimeout(t)
+          res()
+        }
+        const t = setTimeout(done, 1500)
+        v.addEventListener('canplay', done)
+      })
+    }
+    if (wantPlay.current) v.play().catch(() => undefined)
   }
+  const pause = () => {
+    wantPlay.current = false
+    video.current?.pause()
+    setPlaying(false)
+  }
+  const togglePlay = () => (wantPlay.current ? pause() : play())
 
   // when the edit changes while paused, re-show the frame under the playhead
   useEffect(() => {
-    if (playing || !segs.length) return
+    if (wantPlay.current || !segs.length) return
     const t = Math.min(tl, Math.max(0, total - 0.001))
     if (t !== tl) setTl(t)
     const { i, src } = locate(t)
-    loadSeg(i, src, false)
+    loadSeg(i, src)
   }, [segs]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Show a specific source frame (used while trimming so you see where the edge lands). */
+  const showFrame = useCallback(async (path: string, t: number) => {
+    const v = video.current
+    const clip = clipsRef.current[path]
+    if (!v || !clip) return
+    const token = ++loadToken.current
+    if (loadedPath.current !== clip.url) {
+      loadedPath.current = clip.url
+      v.src = clip.url
+      await new Promise<void>((res) => v.addEventListener('loadedmetadata', () => res(), { once: true }))
+      if (token !== loadToken.current) return
+    }
+    v.currentTime = t
+  }, [])
 
   // unplayable codec → make a preview proxy once
   const onVideoError = async () => {
@@ -273,7 +357,7 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
       clipsRef.current = { ...clipsRef.current, [s.path]: { ...clipsRef.current[s.path], url, proxy: 'ready' } }
       loadedPath.current = null
       const { i, src } = locate(tl)
-      loadSeg(i, src, false)
+      loadSeg(i, src)
     } catch (e) {
       toast((e as Error).message)
     }
@@ -331,10 +415,7 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
 
   // pause when the user leaves the editor
   useEffect(() => {
-    if (!active && playing) {
-      video.current?.pause()
-      setPlaying(false)
-    }
+    if (!active && wantPlay.current) pause()
   }, [active]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- keyboard
@@ -360,23 +441,82 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
   })
 
   // ---------------------------------------------------------------- timeline geometry
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const el = trackWrap.current
+    const el = scrollRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => setTrackW(el.clientWidth - 32))
+    const ro = new ResizeObserver(() => setTrackW(Math.max(200, el.clientWidth - 2)))
     ro.observe(el)
     return () => ro.disconnect()
   }, [segs.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
   const pps = total > 0 ? (trackW / total) * zoom : 50 // pixels per output second
 
-  const trackClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    seek((e.clientX - r.left) / pps)
+  // zoom around the playhead: keep it where it was on screen
+  const prevPps = useRef(pps)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && prevPps.current !== pps) {
+      const screenX = tl * prevPps.current - el.scrollLeft
+      el.scrollLeft = Math.max(0, tl * pps - screenX)
+    }
+    prevPps.current = pps
+  }, [pps]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // keep the playhead visible while playing
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !playing) return
+    const x = tl * pps
+    if (x < el.scrollLeft + 20 || x > el.scrollLeft + el.clientWidth - 40) el.scrollLeft = Math.max(0, x - el.clientWidth * 0.25)
+  }, [tl, playing, pps])
+
+  const timeAt = (clientX: number) => {
+    const r = trackRef.current!.getBoundingClientRect()
+    return (clientX - r.left) / pps
+  }
+
+  /** Press and drag anywhere on the ruler / track / a piece → the playhead follows the pointer. */
+  const startScrub = (e: React.PointerEvent, selectId?: string) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    if (selectId) {
+      if (e.shiftKey || e.metaKey || e.ctrlKey)
+        setSel((x) => {
+          const n = new Set(x)
+          n.has(selectId) ? n.delete(selectId) : n.add(selectId)
+          return n
+        })
+      else setSel(new Set([selectId]))
+    } else if (e.target === e.currentTarget) setSel(new Set())
+    const resume = wantPlay.current
+    if (resume) {
+      video.current?.pause()
+    }
+    seek(timeAt(e.clientX))
+    const el = scrollRef.current
+    const mv = (ev: PointerEvent) => {
+      seek(timeAt(ev.clientX))
+      // auto-scroll at the edges
+      if (el) {
+        const r = el.getBoundingClientRect()
+        if (ev.clientX > r.right - 24) el.scrollLeft += 12
+        if (ev.clientX < r.left + 24) el.scrollLeft -= 12
+      }
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', mv)
+      window.removeEventListener('pointerup', up)
+      if (resume) video.current?.play().catch(() => undefined)
+    }
+    window.addEventListener('pointermove', mv)
+    window.addEventListener('pointerup', up)
   }
 
   const startTrim = (e: React.PointerEvent, s: Seg, edge: 'l' | 'r') => {
     e.stopPropagation()
     e.preventDefault()
+    if (wantPlay.current) pause()
     const clip = clips[s.path]
     const x0 = e.clientX
     const orig = { ...s }
@@ -388,11 +528,10 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
         setFuture([])
         moved = true
       }
-      setSegs((ss) =>
-        ss.map((x) =>
-          x.id !== s.id ? x : edge === 'l' ? { ...x, start: Math.max(0, Math.min(orig.end - 0.1, orig.start + dSrc)) } : { ...x, end: Math.min(clip?.info.duration ?? orig.end, Math.max(orig.start + 0.1, orig.end + dSrc)) }
-        )
-      )
+      const start = Math.max(0, Math.min(orig.end - 0.1, orig.start + dSrc))
+      const end = Math.min(clip?.info.duration ?? orig.end, Math.max(orig.start + 0.1, orig.end + dSrc))
+      setSegs((ss) => ss.map((x) => (x.id !== s.id ? x : edge === 'l' ? { ...x, start } : { ...x, end })))
+      showFrame(s.path, edge === 'l' ? start : Math.max(start, end - 0.04)) // live preview of the edge frame
     }
     const up = () => {
       window.removeEventListener('pointermove', mv)
@@ -470,8 +609,7 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
         <button
           className="btn ghost"
           onClick={() => {
-            video.current?.pause()
-            setPlaying(false)
+            pause()
             setSegs([])
             setPast([])
             setFuture([])
@@ -481,7 +619,7 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
         >
           새로 시작
         </button>
-        <button className="btn solid" onClick={() => (video.current?.pause(), setPlaying(false), setExporting(true))}>
+        <button className="btn solid" onClick={() => (pause(), setExporting(true))}>
           내보내기
         </button>
       </div>
@@ -574,7 +712,7 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
 
         <div className="vedit-guide">
           <span>
-            <i>1</i> 자를 곳을 누르고 <b>자르기</b>
+            <i>1</i> 타임라인을 끌어 자를 곳에 막대를 두고 <b>자르기</b>
           </span>
           <span>
             <i>2</i> 필요 없는 조각을 눌러 <b>지우기</b>
@@ -583,18 +721,17 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
             <i>3</i> 조각을 누르고 <b>속도</b> 선택
           </span>
           <span>
-            <i>4</i> 조각을 끌어 순서 바꾸기 · 가장자리를 끌어 길이 조절
+            <i>4</i> <b>⇆ 이동</b>을 끌어 순서 바꾸기 · 양 끝을 끌어 길이 조절
           </span>
-          <span className="grow" />
           <span className="muted">
             <span className="kbd">Space</span> 재생 <span className="kbd">S</span> 자르기 <span className="kbd">Del</span> 지우기
           </span>
         </div>
 
         <div className="vedit-timeline" ref={trackWrap}>
-          <div className="vtrack-scroll">
-            <div className="vtrack" style={{ width: Math.max(trackW, total * pps) }} onMouseDown={(e) => e.target === e.currentTarget && setSel(new Set())}>
-              <div className="vruler" onClick={trackClick}>
+          <div className="vtrack-scroll" ref={scrollRef}>
+            <div className="vtrack" ref={trackRef} style={{ width: Math.max(trackW, total * pps) }} onPointerDown={(e) => startScrub(e)}>
+              <div className="vruler">
                 {Array.from({ length: Math.floor(total / tick) + 1 }, (_, k) => (
                   <span key={k} style={{ left: k * tick * pps }}>
                     {fmt(k * tick)}
@@ -606,10 +743,11 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
                   const clip = clips[s.path]
                   const w = segDur(s) * pps
                   const bgW = clip ? (w * clip.info.duration) / (s.end - s.start) : w
+                  const isSel = sel.has(s.id)
                   return (
                     <div
                       key={s.id}
-                      className={cls('vseg', sel.has(s.id) && 'sel', hoverId === s.id && dragId !== s.id && 'over', s.muted && 'muted')}
+                      className={cls('vseg', isSel && 'sel', hoverId === s.id && dragId !== s.id && 'over', s.muted && 'muted')}
                       style={{
                         left: offsets.o[i] * pps,
                         width: Math.max(4, w - 2),
@@ -617,25 +755,19 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
                         backgroundSize: `${bgW}px 100%`,
                         backgroundPositionX: clip ? `${-(s.start / clip.info.duration) * bgW}px` : undefined
                       }}
-                      draggable
-                      onDragStart={() => setDragId(s.id)}
-                      onDragOver={(e) => (e.preventDefault(), setHoverId(s.id))}
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        startScrub(e, s.id)
+                      }}
+                      onDragOver={(e) => {
+                        if (!dragId) return
+                        e.preventDefault()
+                        setHoverId(s.id)
+                      }}
                       onDrop={() => {
                         if (dragId && dragId !== s.id) moveSeg(dragId, s.id)
                         setDragId(null)
                         setHoverId(null)
-                      }}
-                      onDragEnd={() => (setDragId(null), setHoverId(null))}
-                      onClick={(e) => {
-                        const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                        seek(offsets.o[i] + (e.clientX - r.left) / pps)
-                        if (e.shiftKey || e.metaKey || e.ctrlKey) {
-                          setSel((x) => {
-                            const n = new Set(x)
-                            n.has(s.id) ? n.delete(s.id) : n.add(s.id)
-                            return n
-                          })
-                        } else setSel(new Set([s.id]))
                       }}
                       title={`${clip?.name ?? ''} · ${fmt(s.start, true)}–${fmt(s.end, true)}`}
                     >
@@ -644,10 +776,25 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
                         {s.speed !== 1 && <em>{s.speed}x</em>}
                         {s.muted && <em>무음</em>}
                       </span>
-                      {sel.has(s.id) && (
+                      {isSel && (
                         <>
                           <span className="vtrim l" onPointerDown={(e) => startTrim(e, s, 'l')} title="끌어서 시작점 조절" />
                           <span className="vtrim r" onPointerDown={(e) => startTrim(e, s, 'r')} title="끌어서 끝점 조절" />
+                          {segs.length > 1 && (
+                            <span
+                              className="vgrip"
+                              draggable
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onDragStart={(e) => {
+                                setDragId(s.id)
+                                e.dataTransfer.effectAllowed = 'move'
+                              }}
+                              onDragEnd={() => (setDragId(null), setHoverId(null))}
+                              title="끌어서 순서 바꾸기"
+                            >
+                              ⇆ 이동
+                            </span>
+                          )}
                         </>
                       )}
                     </div>
@@ -660,8 +807,17 @@ export default function VideoEditor({ active, inbox, clearInbox, toast }: Props)
             </div>
           </div>
           <div className="vzoom">
-            <span className="muted">확대</span>
-            <input type="range" className="range" min={1} max={12} step={0.5} value={zoom} onChange={(e) => setZoom(+e.target.value)} />
+            <span className="muted">타임라인 확대</span>
+            <button className="btn ghost" style={{ height: 24, padding: '0 8px' }} onClick={() => setZoom((z) => Math.max(1, z / 1.5))} aria-label="축소">
+              −
+            </button>
+            <input type="range" className="range" min={1} max={12} step={0.25} value={zoom} onChange={(e) => setZoom(+e.target.value)} />
+            <button className="btn ghost" style={{ height: 24, padding: '0 8px' }} onClick={() => setZoom((z) => Math.min(12, z * 1.5))} aria-label="확대">
+              +
+            </button>
+            <button className="btn ghost" style={{ height: 24, padding: '0 8px' }} onClick={() => setZoom(1)}>
+              전체 보기
+            </button>
           </div>
         </div>
       </div>
