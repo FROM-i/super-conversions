@@ -1,5 +1,9 @@
 # 변경 기록
 
+## v0.3.2 — 2026-11-13
+
+- Fix scrolling, playback and timeline drag in library and video editor
+
 ## v0.3.1 — 2026-11-12
 
 - 영상 편집: 불러온 영상을 툴에서만 빼기 · 편집 중에도 불러온 영상 목록 표시 / 작업 탭: 내역 지우기가 화면에 반영되지 않던 문제 수정, 작업별 지우기 추가
